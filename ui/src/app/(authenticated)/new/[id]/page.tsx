@@ -405,7 +405,7 @@ export default function PipelineEditorPage() {
       console.log('Workflow payload:', payload)
       
       // Step 3: Post payload to /v1/design
-      const designResponse = await fetch(`${apiUrl}/v1/design`, {
+      const designResponse = await fetch(`${apiUrl}/v1/design/check`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
