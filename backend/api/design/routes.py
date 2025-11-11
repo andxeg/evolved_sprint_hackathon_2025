@@ -1,6 +1,9 @@
+import argparse
 import json
+import sys
 import uuid
 from http import HTTPStatus
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +16,8 @@ from sanic_ext import validate
 from sanic_ext.extensions.openapi import openapi
 
 from api.design.serializers import DesignInput
+from boltzgen.cli.boltzgen import ARTIFACTS, check_design_spec, get_artifact_path
+from boltzgen.data.mol import load_canonicals
 from core.config import settings
 
 
@@ -27,15 +32,100 @@ class NotFoundResponse(ErrorResponse):
 design_v1 = Blueprint("design", version=1)
 
 
-class DesignView(HTTPMethodView):
+class DesignCheckView(HTTPMethodView):
+    @openapi.definition(
+        response={
+            200: dict[str, Any],
+            400: ErrorResponse,
+            404: ErrorResponse,
+            500: ErrorResponse,
+        },
+    )
     @validate(json=DesignInput)
     async def post(self, request: Request, body: DesignInput) -> Any:
         """
-        Create a new design
+        Check a design specification YAML file and generate a visualization CIF file.
+        
+        The input YAML file should be in OUTPUT_DIR/uploads/ and will be checked.
+        The output CIF file will be written to OUTPUT_DIR/checks/.
         """
+        # Set up paths
+        output_dir = Path(settings.OUTPUT_DIR)
+        uploads_folder = output_dir / "uploads"
+        checks_folder = output_dir / "checks"
+        checks_folder.mkdir(parents=True, exist_ok=True)
 
-        print(body)
-        return response.json({"message": "Design created successfully"})
+        # Find the input YAML file
+        yaml_path = uploads_folder / body.inputYamlFilename
+        if not yaml_path.exists():
+            raise SanicException(
+                status_code=HTTPStatus.NOT_FOUND,
+                message=f"Input YAML file not found: {body.inputYamlFilename}",
+            )
+
+        # Create a mock argparse.Namespace for check_design_spec
+        # We need to capture stdout to check for warnings
+        original_stdout = sys.stdout
+        captured_output = StringIO()
+        
+        try:
+            # Create args object
+            args = argparse.Namespace()
+            args.output = checks_folder
+            args.moldir = ARTIFACTS["moldir"][0]
+            args.force_download = False
+            args.models_token = None
+            args.cache = None
+
+            # Get moldir path
+            moldir = get_artifact_path(args, args.moldir, repo_type="dataset", verbose=False)
+            mols = load_canonicals(moldir=moldir)
+
+            # Capture stdout to check for warnings
+            sys.stdout = captured_output
+            
+            # Run the check
+            check_design_spec(args, moldir, yaml_path, mols)
+            
+            # Restore stdout
+            sys.stdout = original_stdout
+            
+            # Get the output
+            output_text = captured_output.getvalue()
+            
+            # Determine output CIF filename (based on YAML stem)
+            cif_filename = yaml_path.stem + ".cif"
+            cif_path = checks_folder / cif_filename
+            
+            # Check if file was created
+            if not cif_path.exists():
+                raise SanicException(
+                    status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                    message="CIF file was not generated",
+                )
+            
+            # Determine if check passed (no unresolved residues/atoms warnings)
+            # The function prints "There are X unresolved residues" if there are issues
+            check_passed = "unresolved residues" not in output_text.lower() and "unresolved atoms" not in output_text.lower()
+            
+            return response.json(
+                {
+                    "message": "Design check completed",
+                    "check_passed": check_passed,
+                    "cif_filename": cif_filename,
+                    "cif_path": str(cif_path),
+                    "output": output_text,
+                },
+                status=HTTPStatus.OK,
+            )
+            
+        except Exception as e:
+            # Restore stdout in case of error
+            sys.stdout = original_stdout
+            raise SanicException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                message=f"Design check failed: {str(e)}",
+            )
 
 
 class DesignFileView(HTTPMethodView):
@@ -158,5 +248,5 @@ class DesignFileView(HTTPMethodView):
         )
 
 
-design_v1.add_route(DesignView.as_view(), "/design")
+design_v1.add_route(DesignCheckView.as_view(), "/design/check")
 design_v1.add_route(DesignFileView.as_view(), "/upload")
