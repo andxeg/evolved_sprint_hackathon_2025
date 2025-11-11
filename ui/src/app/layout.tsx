@@ -5,7 +5,6 @@ import { ReactNode } from 'react'
 
 import { ThemeProvider } from '@/components/providers'
 import { TailwindIndicator } from '@/components/tailwind-indicator'
-import { ThemeSwitcher } from '@/components/theme-switcher'
 import { Toaster as DefaultToaster } from '@/components/ui/toaster'
 import { siteConfig } from '@/config/site'
 import { fontSans } from '@/lib/fonts'
@@ -108,18 +107,16 @@ export default function RootLayout({ children }: RootLayoutProps) {
         >
           <ThemeProvider
             attribute="class"
-            defaultTheme="dark"
-            enableSystem
+            forcedTheme="dark"
             disableTransitionOnChange
           >
 
               <div vaul-drawer-wrapper="">
-                <div className="relative flex  flex-col bg-background  px-32">
+                <div className="relative flex  flex-col bg-background">
                   {children}
                 </div>
               </div>
               <TailwindIndicator />
-              <ThemeSwitcher />
               <DefaultToaster />
 
           </ThemeProvider>

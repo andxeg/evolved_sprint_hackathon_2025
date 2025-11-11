@@ -308,7 +308,7 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate }: Desig
         fileInputRef.current.value = ''
       }
     }
-    
+
     const clearFile = () => {
       updateEntity(index, { uploadedFile: undefined, path: undefined, uploadedFilename: undefined })
       if (fileInputRef.current) {
@@ -384,15 +384,18 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate }: Desig
         <div>
           <Label className="text-xs">CIF File</Label>
           <div className="mt-2">
-            {entity.uploadedFile || entity.path ? (
+            {entity.uploadedFile || entity.path || entity.uploadedFilename ? (
               <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
-                <span className="text-xs font-mono flex-1">{entity.uploadedFile?.name || entity.path}</span>
+                <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                <span className="text-xs font-mono flex-1">
+                  {entity.uploadedFile?.name || entity.uploadedFilename || entity.path}
+                </span>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={clearFile}
-                  className="h-6 w-6 p-0"
+                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
                 </Button>
