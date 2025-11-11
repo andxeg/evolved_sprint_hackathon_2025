@@ -334,15 +334,16 @@ export default function PipelineEditorPage() {
 
   // Form validation function
   const isFormValid = () => {
-    // For design step, check if entities are defined
-    if (selectedNode?.data?.type === 'design') {
-      return entities.length > 0 && entities.every(entity => {
+    // Check if entities are defined (for design pipeline)
+    if (entities.length > 0) {
+      return entities.every(entity => {
         if (entity.type === 'protein') {
           return entity.id && entity.sequence
         } else if (entity.type === 'ligand') {
           return (entity.id || (entity.ids && entity.ids.length > 0)) && (entity.ccd || entity.smiles)
         } else if (entity.type === 'file') {
-          return entity.path
+          // File is valid if it has path, uploadedFile, or uploadedFilename
+          return entity.path || entity.uploadedFile || entity.uploadedFilename
         }
         return false
       })
@@ -355,9 +356,77 @@ export default function PipelineEditorPage() {
            targetFormData.masked_binder_seq.trim() !== ''
   }
 
-  const handleRun = () => {
+  const handleRun = async () => {
     console.log('Running pipeline...')
-    // Implement run logic
+    
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      
+      // Generate a unique ID for this workflow run
+      const workflowId = pipelineId || `workflow-${Date.now()}`
+      
+      // Step 1: Upload YAML content as a file
+      const yamlContent = vhhConfigYaml || entitiesToYaml(entities)
+      const yamlBlob = new Blob([yamlContent], { type: 'text/yaml' })
+      const yamlFile = new File([yamlBlob], `${workflowId}_input.yaml`, { type: 'text/yaml' })
+      
+      const yamlFormData = new FormData()
+      yamlFormData.append('file', yamlFile)
+      
+      const yamlUploadResponse = await fetch(`${apiUrl}/v1/upload`, {
+        method: 'POST',
+        body: yamlFormData,
+      })
+      
+      if (!yamlUploadResponse.ok) {
+        throw new Error(`YAML upload failed: ${yamlUploadResponse.statusText}`)
+      }
+      
+      const yamlUploadData = await yamlUploadResponse.json()
+      const inputYamlFilename = yamlUploadData.files?.[0]?.file_name || `${workflowId}_input.yaml`
+      
+      // Step 2: Build payload
+      const payload: any = {
+        inputYamlFilename: inputYamlFilename,
+        protocolName: protocol,
+        numDesigns: parseInt(numDesigns) || 10,
+        budget: parseInt(budget) || 2,
+      }
+
+      // Check if any file entity has an uploaded CIF file
+      const fileEntity = entities.find(e => e.type === 'file' && (e.uploadedFilename || e.path))
+      if (fileEntity?.uploadedFilename) {
+        payload.cifFileFilename = fileEntity.uploadedFilename
+      } else if (fileEntity?.path) {
+        // If file was uploaded but filename not saved, use the path
+        payload.cifFileFilename = fileEntity.path
+      }
+
+      console.log('Workflow payload:', payload)
+      
+      // Step 3: Post payload to /v1/design
+      const designResponse = await fetch(`${apiUrl}/v1/design`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      
+      if (!designResponse.ok) {
+        const errorText = await designResponse.text()
+        throw new Error(`Design creation failed: ${designResponse.statusText} - ${errorText}`)
+      }
+      
+      const designData = await designResponse.json()
+      console.log('Design created:', designData)
+      
+      // TODO: Handle success (e.g., redirect, show success message)
+      alert('Workflow started successfully!')
+    } catch (error) {
+      console.error('Error starting workflow:', error)
+      alert(`Failed to start workflow: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
 
@@ -419,10 +488,11 @@ export default function PipelineEditorPage() {
             yaml += `      binding_types: ${entity.binding_types}\n`
           }
         }
-      } else if (entity.type === 'file') {
-        yaml += '  - file:\n'
-        const filePath = entity.uploadedFile?.name || entity.path
-        if (filePath) yaml += `      path: ${filePath}\n`
+          } else if (entity.type === 'file') {
+            yaml += '  - file:\n'
+            // Use uploadedFilename if available (server filename), otherwise use original name
+            const filePath = entity.uploadedFilename || entity.uploadedFile?.name || entity.path
+            if (filePath) yaml += `      path: ${filePath}\n`
         if (entity.include && entity.include.length > 0) {
           yaml += '      include:\n'
           entity.include.forEach((inc) => {

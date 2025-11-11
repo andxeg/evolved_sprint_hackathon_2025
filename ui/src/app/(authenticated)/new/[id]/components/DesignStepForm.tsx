@@ -19,6 +19,7 @@ export interface Entity {
   smiles?: string
   path?: string
   uploadedFile?: File // For file upload
+  uploadedFilename?: string // Server filename after upload
   cyclic?: boolean
   binding_types?: string | { binding?: string; not_binding?: string }
   secondary_structure?: string
@@ -259,20 +260,57 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate }: Desig
     const includeChains = entity.include || []
     const bindingTypeChains = entity.binding_types_chain || []
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
-      if (file && file.name.endsWith('.cif')) {
-        updateEntity(index, { uploadedFile: file, path: file.name })
-      } else {
+      if (!file) return
+      
+      if (!file.name.endsWith('.cif')) {
         alert('Please upload a .cif file')
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        return
       }
+
+      // Update UI immediately
+      updateEntity(index, { uploadedFile: file, path: file.name })
+
+      try {
+        // Upload file to server
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}/v1/upload`, {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`)
+        }
+
+        const data = await response.json()
+        
+        // Save the server filename
+        if (data.files && data.files.length > 0) {
+          const serverFilename = data.files[0].file_name
+          updateEntity(index, { uploadedFilename: serverFilename })
+        }
+      } catch (error) {
+        console.error('File upload error:', error)
+        alert(`Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        // Clear the file on error
+        updateEntity(index, { uploadedFile: undefined, path: undefined, uploadedFilename: undefined })
+      }
+
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
     }
     
     const clearFile = () => {
-      updateEntity(index, { uploadedFile: undefined, path: undefined })
+      updateEntity(index, { uploadedFile: undefined, path: undefined, uploadedFilename: undefined })
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
