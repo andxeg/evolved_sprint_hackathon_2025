@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "evolved-hackathon-backend"
 version = "0.1.0"
@@ -7,13 +11,10 @@ dependencies = [
     "aiofiles>=24.1.0",
     "alembic>=1.14.0",
     "attrs>=24.3.0",
-    "biopython>=1.84",
     "dm-tree>=0.1.8",
     "dynaconf>=3.2.6",
-    "matplotlib>=3.10.0",
     "motor>=3.6.1",
     "msgspec>=0.19.0",
-    "numpy>=2.2.1",
     "openai>=1.59.3",
     "ory-client>=1.12.2",
     "Pillow>=10.0.0",
@@ -29,6 +30,31 @@ dependencies = [
     "cryptography>=44.0.2",
     "requests>=2.32.3",
     "rcsb-api>=1.4.1",
+    "numpy==2.0.2",
+    "numba==0.61.0",
+    "matplotlib",
+    "hydride",
+    "biotite",
+    "pydssp",
+    "logomaker",
+    "gemmi==0.6.5",
+    "torch>=2.4.1",
+    "scikit-learn",
+    "hydra-core",
+    "edit_distance",
+    "pytorch-lightning",
+    "rdkit",
+    "pandas",
+    "pdbeccdutils",
+    "einx",
+    "einops",
+    "mashumaro",
+    "nvidia-ml-py>=12.535.133",
+    "cuequivariance_ops_cu12>=0.5.0",
+    "cuequivariance_ops_torch_cu12>=0.5.0",
+    "cuequivariance_torch>=0.5.0",
+    "huggingface_hub",
+    "biopython",
 ]
 
 [dependency-groups]
@@ -43,6 +69,19 @@ dev = [
     "types-requests>=2.32.0.20250306",
     "typing-extensions>=4.12.2",
 ]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+boltzgen = ["resources/config/**/*"]
+
+[project.scripts]
+boltzgen = "boltzgen.cli.boltzgen:main"
+
 
 [tool.mypy]
 strict = true
