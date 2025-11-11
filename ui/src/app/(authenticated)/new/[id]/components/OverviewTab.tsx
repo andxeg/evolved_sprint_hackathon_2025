@@ -28,6 +28,20 @@ interface OverviewTabProps {
   colorMode: ColorMode
 }
 
+function FlowContent({ colorMode }: { colorMode: ColorMode }) {
+  return (
+    <>
+      <Controls />
+      <Background 
+        variant={BackgroundVariant.Dots} 
+        gap={12} 
+        size={1}
+        color={colorMode === 'dark' ? '#374151' : '#e5e7eb'}
+      />
+    </>
+  )
+}
+
 export function OverviewTab({
   nodes,
   edges,
@@ -50,7 +64,9 @@ export function OverviewTab({
           onNodeClick={onNodeClick}
           nodeTypes={nodeTypes}
           connectionLineType={ConnectionLineType.SmoothStep}
-          fitView
+          defaultViewport={{ x: 50, y: 290, zoom: 1.2 }}
+          minZoom={0.3}
+          maxZoom={2}
           colorMode={colorMode}
           nodesDraggable={false}
           nodesConnectable={false}
@@ -59,13 +75,7 @@ export function OverviewTab({
           zoomOnScroll={true}
           panOnScroll={true}
         >
-          <Controls />
-          <Background 
-            variant={BackgroundVariant.Dots} 
-            gap={12} 
-            size={1}
-            color={colorMode === 'dark' ? '#374151' : '#e5e7eb'}
-          />
+          <FlowContent colorMode={colorMode} />
         </ReactFlow>
       </div>
     </div>

@@ -57,6 +57,9 @@ export default function PipelineEditorPage() {
   const [pipelineName, setPipelineName] = useState('')
   const [editPipelineName, setEditPipelineName] = useState(true)
   const [gpuType, setGpuType] = useState('8x H100 Nebius')
+  const [protocol, setProtocol] = useState('protein-anything')
+  const [numDesigns, setNumDesigns] = useState('10')
+  const [budget, setBudget] = useState('2')
   
   const [targetFormData, setTargetFormData] = useState({
     target_id: '',
@@ -383,9 +386,6 @@ export default function PipelineEditorPage() {
     if (entities.length === 0) {
       return `entities:
   # Add your entities here (proteins, ligands, files)
-
-constraints:
-  # Add your constraints here (bonds, total_len)
 `
     }
 
@@ -421,7 +421,8 @@ constraints:
         }
       } else if (entity.type === 'file') {
         yaml += '  - file:\n'
-        if (entity.path) yaml += `      path: ${entity.path}\n`
+        const filePath = entity.uploadedFile?.name || entity.path
+        if (filePath) yaml += `      path: ${filePath}\n`
         if (entity.include && entity.include.length > 0) {
           yaml += '      include:\n'
           entity.include.forEach((inc) => {
@@ -429,6 +430,28 @@ constraints:
             yaml += `            id: ${inc.id}\n`
             if (inc.res_index) yaml += `            res_index: ${inc.res_index}\n`
           })
+        }
+        if (entity.binding_types_chain && entity.binding_types_chain.length > 0) {
+          yaml += '      binding_types:\n'
+          entity.binding_types_chain.forEach((bt) => {
+            yaml += `        - chain:\n`
+            yaml += `            id: ${bt.id}\n`
+            if (bt.binding) yaml += `            binding: ${bt.binding}\n`
+            if (bt.not_binding) yaml += `            not_binding: ${bt.not_binding}\n`
+          })
+        }
+        if (entity.structure_groups) {
+          if (typeof entity.structure_groups === 'string') {
+            yaml += `      structure_groups: ${entity.structure_groups}\n`
+          } else if (Array.isArray(entity.structure_groups) && entity.structure_groups.length > 0) {
+            yaml += '      structure_groups:\n'
+            entity.structure_groups.forEach((sg) => {
+              yaml += `        - group:\n`
+              yaml += `            visibility: ${sg.visibility}\n`
+              yaml += `            id: ${sg.id}\n`
+              if (sg.res_index) yaml += `            res_index: ${sg.res_index}\n`
+            })
+          }
         }
         if (entity.exclude && entity.exclude.length > 0) {
           yaml += '      exclude:\n'
@@ -441,8 +464,9 @@ constraints:
       }
     })
 
-    yaml += '\nconstraints:\n'
-    yaml += '  # Add your constraints here (bonds, total_len)\n'
+    // Only add constraints section if there are actual constraints
+    // For now, we'll leave it empty since constraints are not yet implemented in the form
+    // yaml += '\nconstraints:\n'
 
     return yaml
   }
@@ -612,7 +636,7 @@ constraints:
   const { pipeline } = pipelineData
 
   return (
-    <div className="h-[calc(100vh-4rem-12rem)] w-full flex flex-col relative -m-4 overflow-hidden max-w-full">
+    <div className="h-full w-full flex flex-col relative -m-4 overflow-hidden max-w-full flex-1 min-h-0">
       {/* Header */}
       <PipelineHeader
         pipelineTitle={pipeline.title}
@@ -675,13 +699,33 @@ constraints:
               </div>
 
               {/* Floating Form Content - Scrollable Area */}
-              <div className="flex-1 min-h-0 overflow-y-auto">
-                <div className="space-y-4">
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <div className="h-full">
                   {/* Design Step Form */}
                   {selectedNode.data?.type === 'design' ? (
                     <DesignStepForm
                       entities={entities}
                       onEntitiesChange={handleEntitiesChange}
+                      onValidate={() => {
+                        // Sync entities to YAML and validate
+                        const newYaml = entitiesToYaml(entities)
+                        setVhhConfigYaml(newYaml)
+                        setYamlHasChanges(true)
+                        
+                        // Validate the YAML content
+                        const result = validateYamlContent(newYaml)
+                        setYamlValidationResult(result)
+                        
+                        // Show validation message
+                        if (result.isValid) {
+                          setYamlSaveMessage('Design validated successfully!')
+                        } else {
+                          setYamlSaveMessage(`Validation failed: ${result.errors?.join(', ') || 'Invalid design'}`)
+                        }
+                        
+                        // Clear message after 3 seconds
+                        setTimeout(() => setYamlSaveMessage(null), 3000)
+                      }}
                     />
                   ) : (
                     <>
@@ -912,6 +956,12 @@ constraints:
                 generatePipelineName={generatePipelineName}
                 gpuType={gpuType}
                 setGpuType={setGpuType}
+                protocol={protocol}
+                setProtocol={setProtocol}
+                numDesigns={numDesigns}
+                setNumDesigns={setNumDesigns}
+                budget={budget}
+                setBudget={setBudget}
               />
             </div>
           </div>

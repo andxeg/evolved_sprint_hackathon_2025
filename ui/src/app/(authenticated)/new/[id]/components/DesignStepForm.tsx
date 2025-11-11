@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
-import React, { useState } from 'react'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Plus, Trash2, ChevronDown, ChevronUp, Upload, X, CheckCircle2 } from 'lucide-react'
+import React, { useState, useRef } from 'react'
 
 export interface Entity {
   type: 'protein' | 'ligand' | 'file'
@@ -17,6 +18,7 @@ export interface Entity {
   ccd?: string
   smiles?: string
   path?: string
+  uploadedFile?: File // For file upload
   cyclic?: boolean
   binding_types?: string | { binding?: string; not_binding?: string }
   secondary_structure?: string
@@ -24,17 +26,79 @@ export interface Entity {
   exclude?: Array<{ id: string; res_index?: string }>
   design?: Array<{ id: string; res_index?: string }>
   binding_types_chain?: Array<{ id: string; binding?: string; not_binding?: string }>
-  structure_groups?: Array<{ visibility: number; id: string; res_index?: string }>
+  structure_groups?: string | Array<{ visibility: number; id: string; res_index?: string }>
   design_insertions?: Array<{ id: string; res_index: number; num_residues: string; secondary_structure?: string }>
 }
 
 interface DesignStepFormProps {
   entities: Entity[]
   onEntitiesChange: (entities: Entity[]) => void
+  onValidate?: () => void
 }
 
-export function DesignStepForm({ entities, onEntitiesChange }: DesignStepFormProps) {
+export function DesignStepForm({ entities, onEntitiesChange, onValidate }: DesignStepFormProps) {
   const [expandedEntity, setExpandedEntity] = useState<number | null>(null)
+  const [selectedEntityType, setSelectedEntityType] = useState<'protein' | 'ligand' | 'file' | ''>('')
+  // Store refs for file inputs by entity index
+  const fileInputRefs = React.useRef<Map<number, HTMLInputElement>>(new Map())
+  // Store form state for each file entity
+  const [fileFormState, setFileFormState] = useState<Map<number, {
+    type: 'include' | 'binding_types'
+    chainId: string
+    bindingResidues: string
+  }>>(new Map())
+  
+  const getFileInputRef = (index: number) => {
+    if (!fileInputRefs.current.has(index)) {
+      fileInputRefs.current.set(index, null as any)
+    }
+    return {
+      current: fileInputRefs.current.get(index) || null,
+      set: (element: HTMLInputElement | null) => {
+        if (element) {
+          fileInputRefs.current.set(index, element)
+        } else {
+          fileInputRefs.current.delete(index)
+        }
+      }
+    }
+  }
+
+  const [showAddChainForm, setShowAddChainForm] = useState<Map<number, boolean>>(new Map())
+
+  const getFileFormState = (index: number) => {
+    if (!fileFormState.has(index)) {
+      setFileFormState(prev => {
+        const newMap = new Map(prev)
+        newMap.set(index, { type: 'include', chainId: '', bindingResidues: '' })
+        return newMap
+      })
+      return { type: 'include' as const, chainId: '', bindingResidues: '' }
+    }
+    return fileFormState.get(index)!
+  }
+
+  const toggleAddChainForm = (index: number) => {
+    setShowAddChainForm(prev => {
+      const newMap = new Map(prev)
+      const current = newMap.get(index) || false
+      newMap.set(index, !current)
+      return newMap
+    })
+  }
+
+  const updateFileFormState = (index: number, updates: Partial<{
+    type: 'include' | 'binding_types'
+    chainId: string
+    bindingResidues: string
+  }>) => {
+    setFileFormState(prev => {
+      const newMap = new Map(prev)
+      const current = newMap.get(index) || { type: 'include' as const, chainId: '', bindingResidues: '' }
+      newMap.set(index, { ...current, ...updates })
+      return newMap
+    })
+  }
 
   const addEntity = (type: 'protein' | 'ligand' | 'file') => {
     const newEntity: Entity = { type }
@@ -188,65 +252,310 @@ export function DesignStepForm({ entities, onEntitiesChange }: DesignStepFormPro
   }
 
   const renderFileForm = (entity: Entity, index: number) => {
+    const fileInputRef = getFileInputRef(index)
+    const formState = getFileFormState(index)
+    
+    // Separate chains for include and binding_types
+    const includeChains = entity.include || []
+    const bindingTypeChains = entity.binding_types_chain || []
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (file && file.name.endsWith('.cif')) {
+        updateEntity(index, { uploadedFile: file, path: file.name })
+      } else {
+        alert('Please upload a .cif file')
+      }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+    
+    const clearFile = () => {
+      updateEntity(index, { uploadedFile: undefined, path: undefined })
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+
+    const addChain = () => {
+      const chainId = formState.chainId.toUpperCase().trim()
+      if (!chainId || chainId.length !== 1) {
+        alert('Please enter a single letter for Chain ID')
+        return
+      }
+
+      if (formState.type === 'include') {
+        // Check if chain already exists
+        if (includeChains.find(c => c.id === chainId)) {
+          alert(`Chain ${chainId} already exists in Include Chains`)
+          return
+        }
+        const newChains = [...includeChains, { id: chainId }]
+        updateEntity(index, { include: newChains })
+        // Hide form after successfully adding to include chains
+        setShowAddChainForm(prev => {
+          const newMap = new Map(prev)
+          newMap.set(index, false)
+          return newMap
+        })
+      } else {
+        // Check if chain already exists
+        if (bindingTypeChains.find(c => c.id === chainId)) {
+          alert(`Chain ${chainId} already exists in Binding Types`)
+          return
+        }
+        if (!formState.bindingResidues.trim()) {
+          alert('Please enter binding residues for binding_types')
+          return
+        }
+        const newChains = [...bindingTypeChains, { id: chainId, binding: formState.bindingResidues.trim() }]
+        updateEntity(index, { binding_types_chain: newChains })
+        // Hide form after successfully adding to binding types
+        setShowAddChainForm(prev => {
+          const newMap = new Map(prev)
+          newMap.set(index, false)
+          return newMap
+        })
+      }
+
+      // Reset form fields
+      updateFileFormState(index, { chainId: '', bindingResidues: '' })
+    }
+
+    const removeIncludeChain = (chainIndex: number) => {
+      const newChains = includeChains.filter((_, i) => i !== chainIndex)
+      updateEntity(index, { include: newChains.length > 0 ? newChains : undefined })
+    }
+
+    const removeBindingTypeChain = (chainIndex: number) => {
+      const newChains = bindingTypeChains.filter((_, i) => i !== chainIndex)
+      updateEntity(index, { binding_types_chain: newChains.length > 0 ? newChains : undefined })
+    }
+
+    const updateBindingTypeChain = (chainIndex: number, binding: string) => {
+      const newChains = bindingTypeChains.map((chain, i) => 
+        i === chainIndex ? { ...chain, binding } : chain
+      )
+      updateEntity(index, { binding_types_chain: newChains })
+    }
+
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
+        {/* File Upload */}
         <div>
-          <Label className="text-xs">Path</Label>
-          <Input
-            value={entity.path || ''}
-            onChange={(e) => updateEntity(index, { path: e.target.value })}
-            placeholder="e.g., 7rpz.cif or hard_targets/6m1u.cif"
-            className="h-8 text-xs font-mono"
-          />
+          <Label className="text-xs">CIF File</Label>
+          <div className="mt-2">
+            {entity.uploadedFile || entity.path ? (
+              <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
+                <span className="text-xs font-mono flex-1">{entity.uploadedFile?.name || entity.path}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFile}
+                  className="h-6 w-6 p-0"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ) : (
+              <div className="border-2 border-dashed rounded-md p-4 text-center">
+                <input
+                  ref={(el) => fileInputRef.set(el)}
+                  type="file"
+                  accept=".cif"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id={`file-upload-${index}`}
+                />
+                <Label
+                  htmlFor={`file-upload-${index}`}
+                  className="cursor-pointer flex flex-col items-center gap-2"
+                >
+                  <Upload className="h-6 w-6 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
+                    Click to upload or drag and drop
+                  </span>
+                  <span className="text-xs text-muted-foreground">.cif files only</span>
+                </Label>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Add Chain Button and Form */}
         <div>
-          <Label className="text-xs">Include Chains (optional)</Label>
-          <Textarea
-            value={entity.include?.map(c => `chain: ${c.id}${c.res_index ? `, res_index: ${c.res_index}` : ''}`).join('\n') || ''}
-            onChange={(e) => {
-              const lines = e.target.value.split('\n').filter(l => l.trim())
-              const include = lines.map(line => {
-                const match = line.match(/chain:\s*(\w+)(?:,\s*res_index:\s*(.+))?/)
-                if (match) {
-                  return { id: match[1], res_index: match[2] || undefined }
-                }
-                return { id: line.trim() }
-              })
-              updateEntity(index, { include })
+          {!showAddChainForm.get(index) ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => toggleAddChainForm(index)}
+              className="h-7 w-full text-xs"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Add Chain
+            </Button>
+          ) : (
+            <div className="p-3 border rounded-md bg-muted/30 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Add Chain</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleAddChainForm(index)}
+                  className="h-6 w-6 p-0"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+              <div>
+                <Label className="text-xs">Type</Label>
+                <Select 
+                  value={formState.type} 
+                  onValueChange={(v) => updateFileFormState(index, { type: v as 'include' | 'binding_types' })}
+                >
+                  <SelectTrigger className="h-7 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="include">include</SelectItem>
+                    <SelectItem value="binding_types">binding_types</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Chain ID</Label>
+                <Input
+                  value={formState.chainId}
+                  onChange={(e) => updateFileFormState(index, { chainId: e.target.value.toUpperCase() })}
+                  placeholder="e.g., A"
+                  className="h-7 text-xs font-mono"
+                  maxLength={1}
+                />
+              </div>
+              {formState.type === 'binding_types' && (
+                <div>
+                  <Label className="text-xs">Binding Residues</Label>
+                  <Input
+                    value={formState.bindingResidues}
+                    onChange={(e) => updateFileFormState(index, { bindingResidues: e.target.value })}
+                    placeholder="e.g., 343,344,251"
+                    className="h-7 text-xs font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Comma-separated residue indices
+                  </p>
+                </div>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addChain}
+                className="h-7 w-full text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Chain
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Include Chains List */}
+        {includeChains.length > 0 && (
+          <div>
+            <Label className="text-xs font-medium mb-2 block">Include Chains</Label>
+            <div className="space-y-2">
+              {includeChains.map((chain, chainIndex) => (
+                <div key={chainIndex} className="p-2 border rounded-md flex items-center justify-between gap-2">
+                  <span className="text-xs font-mono flex-1">Chain {chain.id}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removeIncludeChain(chainIndex)}
+                    className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Binding Types Chains List */}
+        {bindingTypeChains.length > 0 && (
+          <div>
+            <Label className="text-xs font-medium mb-2 block">Binding Types</Label>
+            <div className="space-y-2">
+              {bindingTypeChains.map((chain, chainIndex) => (
+                <div key={chainIndex} className="p-2 border rounded-md space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-mono flex-1">Chain {chain.id}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeBindingTypeChain(chainIndex)}
+                      className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Remove
+                    </Button>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Binding Residues</Label>
+                    <Input
+                      value={chain.binding || ''}
+                      onChange={(e) => updateBindingTypeChain(chainIndex, e.target.value)}
+                      placeholder="e.g., 343,344,251"
+                      className="h-7 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Structure Groups */}
+        <div>
+          <Label className="text-xs">Structure Groups (optional)</Label>
+          <Select
+            value={typeof entity.structure_groups === 'string' ? entity.structure_groups : 'none'}
+            onValueChange={(v) => {
+              if (v === 'all') {
+                updateEntity(index, { structure_groups: 'all' })
+              } else {
+                updateEntity(index, { structure_groups: undefined })
+              }
             }}
-            placeholder="chain: A&#10;chain: B, res_index: 2..50"
-            className="min-h-[60px] text-xs font-mono"
-          />
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Not specified</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground mt-1">
-            Format: chain: A or chain: A, res_index: 2..50,55..
+            Specify which regions should have their structure specified
           </p>
-        </div>
-        <div>
-          <Label className="text-xs">Exclude Chains (optional)</Label>
-          <Textarea
-            value={entity.exclude?.map(c => `chain: ${c.id}${c.res_index ? `, res_index: ${c.res_index}` : ''}`).join('\n') || ''}
-            onChange={(e) => {
-              const lines = e.target.value.split('\n').filter(l => l.trim())
-              const exclude = lines.map(line => {
-                const match = line.match(/chain:\s*(\w+)(?:,\s*res_index:\s*(.+))?/)
-                if (match) {
-                  return { id: match[1], res_index: match[2] || undefined }
-                }
-                return { id: line.trim() }
-              })
-              updateEntity(index, { exclude })
-            }}
-            placeholder="chain: A, res_index: ..5"
-            className="min-h-[60px] text-xs font-mono"
-          />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full min-h-0">
+      {/* Header - Fixed */}
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div>
           <h4 className="font-medium text-sm">Entities</h4>
           <p className="text-xs text-muted-foreground">
@@ -254,9 +563,12 @@ export function DesignStepForm({ entities, onEntitiesChange }: DesignStepFormPro
           </p>
         </div>
         <div className="flex gap-2">
-          <Select onValueChange={(v) => addEntity(v as 'protein' | 'ligand' | 'file')}>
+          <Select 
+            value={selectedEntityType} 
+            onValueChange={(v) => setSelectedEntityType(v as 'protein' | 'ligand' | 'file')}
+          >
             <SelectTrigger className="h-8 text-xs w-32">
-              <SelectValue placeholder="Add..." />
+              <SelectValue placeholder="Entity type" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="protein">Protein</SelectItem>
@@ -264,64 +576,113 @@ export function DesignStepForm({ entities, onEntitiesChange }: DesignStepFormPro
               <SelectItem value="file">File</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={() => {
+              if (selectedEntityType) {
+                addEntity(selectedEntityType)
+                setSelectedEntityType('')
+              }
+            }}
+            disabled={!selectedEntityType || expandedEntity !== null}
+            className="h-8 text-xs"
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Add
+          </Button>
         </div>
       </div>
 
-      {entities.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-xs text-muted-foreground text-center">
-              No entities added yet. Click "Add..." to get started.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {entities.map((entity, index) => (
-            <Card key={index}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-sm">
-                      {entity.type.charAt(0).toUpperCase() + entity.type.slice(1)} {index + 1}
-                      {entity.id && ` (${entity.id})`}
-                    </CardTitle>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => toggleExpand(index)}
-                      className="h-6 w-6 p-0"
-                    >
-                      {expandedEntity === index ? (
-                        <ChevronUp className="h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeEntity(index)}
-                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              {expandedEntity === index && (
-                <CardContent>
-                  {entity.type === 'protein' && renderProteinForm(entity, index)}
-                  {entity.type === 'ligand' && renderLigandForm(entity, index)}
-                  {entity.type === 'file' && renderFileForm(entity, index)}
-                </CardContent>
-              )}
+      {/* Scrollable Content Area */}
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="space-y-3 pr-4">
+          {entities.length === 0 ? (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-xs text-muted-foreground text-center">
+                  No entities added yet. Click "Add..." to get started.
+                </p>
+              </CardContent>
             </Card>
-          ))}
+          ) : (
+            <div className="space-y-2">
+              {entities.map((entity, index) => (
+                <Card key={index}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-sm">
+                          {entity.type.charAt(0).toUpperCase() + entity.type.slice(1)} {index + 1}
+                          {entity.id && ` (${entity.id})`}
+                        </CardTitle>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleExpand(index)}
+                          className="h-6 w-6 p-0"
+                        >
+                          {expandedEntity === index ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeEntity(index)}
+                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {expandedEntity === index && (
+                    <CardContent className="p-0">
+                      <div className="h-[400px] overflow-y-auto overflow-x-hidden">
+                        <div className="p-6">
+                          {entity.type === 'protein' && renderProteinForm(entity, index)}
+                          {entity.type === 'ligand' && renderLigandForm(entity, index)}
+                          {entity.type === 'file' && renderFileForm(entity, index)}
+                        </div>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Validate Design Button - Only show when entities are added */}
+          {entities.length > 0 && (
+            <div className="pt-4 border-t">
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  // Trigger validation by calling onValidate if provided
+                  if (onValidate) {
+                    onValidate()
+                  }
+                }}
+                className="w-full h-8 text-xs"
+              >
+                <CheckCircle2 className="h-3 w-3 mr-2" />
+                Validate Design
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                Validates the design and syncs with YAML editor
+              </p>
+            </div>
+          )}
         </div>
-      )}
+      </ScrollArea>
     </div>
   )
 }

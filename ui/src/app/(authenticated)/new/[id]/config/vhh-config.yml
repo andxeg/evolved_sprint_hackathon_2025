@@ -16,13 +16,3 @@ entities:
   #     include:
   #       - chain:
   #           id: A
-
-constraints:
-  # Add your constraints here (bonds, total_len)
-  # Example:
-  # - bond:
-  #     atom1: [R, 4, SG]
-  #     atom2: [Q, 1, CK]
-  # - total_len:
-  #     min: 10
-  #     max: 20

@@ -10,8 +10,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <LayoutContent>
         {children}
       </LayoutContent>
-      <footer className="mt-auto py-6 flex flex-col justify-center items-center gap-4">
-        <p className="text-sm text-muted-foreground">Fastfold AI team</p>
+      <footer className="mt-auto py-2 flex flex-col justify-center items-center gap-4 pt-0">
         <div className="flex justify-center items-center gap-8">
           <Image
             src="/ev.png"
@@ -38,6 +37,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             priority={false}
           />
         </div>
+        <p className="text-sm text-muted-foreground">Fastfold AI team</p>
+
       </footer>
     </div>
   )
@@ -49,7 +50,7 @@ function LayoutContent({
   children: React.ReactNode
 }) {
   return (
-    <div className={`flex flex-1 flex-col gap-4 p-4 pt-0 xs:p-0`}>
+    <div className={`flex flex-1 flex-col `}>
       {children}
     </div>
   )

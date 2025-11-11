@@ -21,9 +21,55 @@ export function validateYamlContent(yamlContent: string): ValidationResult {
       return { isValid: false, errors, warnings }
     }
 
-    // Check for extra properties not in schema
-    const allowedTopLevelKeys = Object.keys(vhhConfigSchema.properties || {})
     const actualTopLevelKeys = Object.keys(parsed)
+
+    // Check if this is a design spec format (has entities key)
+    const isDesignSpec = actualTopLevelKeys.includes('entities')
+    
+    if (isDesignSpec) {
+      // Validate design spec format
+      const allowedDesignSpecKeys = ['entities', 'constraints']
+      const extraKeys = actualTopLevelKeys.filter(key => !allowedDesignSpecKeys.includes(key))
+      if (extraKeys.length > 0) {
+        errors.push(`Invalid top-level keys found: ${extraKeys.join(', ')}. Only these keys are allowed: ${allowedDesignSpecKeys.join(', ')}`)
+      }
+
+      // Validate entities
+      if (parsed.entities) {
+        if (!Array.isArray(parsed.entities)) {
+          errors.push('entities must be an array')
+        } else {
+          // Basic validation for entities
+          parsed.entities.forEach((entity: any, index: number) => {
+            if (!entity || typeof entity !== 'object') {
+              errors.push(`Entity at index ${index} must be an object`)
+              return
+            }
+            
+            const entityTypes = ['protein', 'ligand', 'file']
+            const entityType = entityTypes.find(type => entity[type] !== undefined)
+            
+            if (!entityType) {
+              errors.push(`Entity at index ${index} must have one of: ${entityTypes.join(', ')}`)
+            }
+          })
+        }
+      }
+
+      // Validate constraints (optional)
+      if (parsed.constraints && !Array.isArray(parsed.constraints)) {
+        errors.push('constraints must be an array')
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors,
+        warnings
+      }
+    }
+
+    // Old format validation (template_config, etc.)
+    const allowedTopLevelKeys = Object.keys(vhhConfigSchema.properties || {})
 
     // Find extra keys
     const extraKeys = actualTopLevelKeys.filter(key => !allowedTopLevelKeys.includes(key))
