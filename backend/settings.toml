@@ -3,7 +3,7 @@
 PROJECT_NAME = "Evolved Hackathon API"
 HOST_API = "http://localhost:8000"
 
-LOCAL_OUTPUT_PATH = "/Users/juliocesar/Data/evolved-hackathon-results"
+LOCAL_OUTPUT_PATH = "/home/nebius/julio/runs"
 DOCKER_OUTPUT_PATH = "/mnt/shared"
 
 [local]
