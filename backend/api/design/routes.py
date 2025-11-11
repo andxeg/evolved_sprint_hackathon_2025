@@ -19,6 +19,7 @@ from api.design.serializers import DesignInput
 from boltzgen.cli.boltzgen import ARTIFACTS, check_design_spec, get_artifact_path
 from boltzgen.data.mol import load_canonicals
 from core.config import settings
+from urllib.parse import quote
 
 
 class ErrorResponse(msgspec.Struct):
@@ -108,12 +109,15 @@ class DesignCheckView(HTTPMethodView):
             # The function prints "There are X unresolved residues" if there are issues
             check_passed = "unresolved residues" not in output_text.lower() and "unresolved atoms" not in output_text.lower()
             
+            # Build the full URL to the CIF file
+            cif_url = f"/v1/files/checks/{quote(cif_filename)}"
+            
             return response.json(
                 {
                     "message": "Design check completed",
                     "check_passed": check_passed,
                     "cif_filename": cif_filename,
-                    "cif_path": str(cif_path),
+                    "cif_url": cif_url,
                     "output": output_text,
                 },
                 status=HTTPStatus.OK,
@@ -248,5 +252,93 @@ class DesignFileView(HTTPMethodView):
         )
 
 
+class DesignFileServeView(HTTPMethodView):
+    @openapi.definition(
+        response={
+            200: dict[str, Any],
+            400: ErrorResponse,
+            404: NotFoundResponse,
+        },
+    )
+    async def get(self, request: Request, folder: str, filename: str) -> Any:
+        """
+        Serve a file from the OUTPUT_DIR by folder and filename.
+        
+        Parameters
+        ----------
+        folder : str
+            The folder name (e.g., "checks", "uploads")
+        filename : str
+            The filename to serve
+        """
+        # Validate folder name to prevent directory traversal
+        allowed_folders = {"checks", "uploads"}
+        if folder not in allowed_folders:
+            raise SanicException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                message=f"Invalid folder. Allowed folders: {', '.join(allowed_folders)}",
+            )
+        
+        # Build file path
+        output_dir = Path(settings.OUTPUT_DIR)
+        file_path = output_dir / folder / filename
+        
+        # Security check: ensure the file is within the allowed directory
+        try:
+            file_path.resolve().relative_to(output_dir.resolve())
+        except ValueError:
+            raise SanicException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                message="Invalid file path",
+            )
+        
+        # Check if file exists
+        if not file_path.exists():
+            raise SanicException(
+                status_code=HTTPStatus.NOT_FOUND,
+                message=f"File not found: {filename} in folder {folder}",
+            )
+        
+        # Check if it's a file (not a directory)
+        if not file_path.is_file():
+            raise SanicException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                message=f"Path is not a file: {filename}",
+            )
+        
+        # Determine content type based on file extension
+        content_type = "application/octet-stream"
+        if filename.endswith(".cif"):
+            content_type = "chemical/x-cif"
+        elif filename.endswith(".yaml") or filename.endswith(".yml"):
+            content_type = "application/x-yaml"
+        elif filename.endswith(".json"):
+            content_type = "application/json"
+        elif filename.endswith(".txt"):
+            content_type = "text/plain"
+        
+        # Read and serve the file
+        try:
+            with open(file_path, "rb") as f:
+                file_content = f.read()
+            
+            # Escape filename for Content-Disposition header
+            safe_filename = filename.replace('"', '\\"')
+            
+            return response.raw(
+                file_content,
+                content_type=content_type,
+                headers={
+                    "Content-Disposition": f'attachment; filename="{safe_filename}"',
+                },
+            )
+        except Exception as e:
+            raise SanicException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                message=f"Error reading file: {str(e)}",
+            )
+
+
 design_v1.add_route(DesignCheckView.as_view(), "/design/check")
 design_v1.add_route(DesignFileView.as_view(), "/upload")
+design_v1.add_route(DesignFileServeView.as_view(), "/files/<folder>/<filename>")
