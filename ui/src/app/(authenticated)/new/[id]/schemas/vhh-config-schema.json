@@ -1,0 +1,231 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://fastfold.ai/schemas/vhh-config.json",
+  "title": "VHH Binder Design Pipeline Configuration",
+  "description": "Configuration schema for VHH binder design pipeline parameters",
+  "type": "object",
+  "properties": {
+    "template_config": {
+      "type": "object",
+      "description": "Template configuration for VHH binder design",
+      "properties": {
+        "folding_model": {
+          "type": "string",
+          "enum": ["nbb2", "esmfold"],
+          "default": "nbb2",
+          "description": "Folding model to use for protein structure prediction"
+        },
+        "sasa_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "default": 50.0,
+          "description": "Threshold for solvent accessible surface area in hotspot selection"
+        },
+        "hotspot_strategy": {
+          "type": "string",
+          "enum": ["top_k", "random", "none"],
+          "default": "random",
+          "description": "Strategy for selecting hotspots"
+        },
+        "pae_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "default": 30.0,
+          "description": "Threshold for predicted aligned error in truncation"
+        },
+        "distance_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "default": 25.0,
+          "description": "Distance threshold for truncation"
+        },
+        "gap_penalty": {
+          "type": "number",
+          "minimum": 0,
+          "default": 10.0,
+          "description": "Penalty for gaps in sequence alignment"
+        },
+        "include_surrounding_context": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to include surrounding context in truncation"
+        },
+        "plm_model": {
+          "type": "string",
+          "enum": ["esm2-650M"],
+          "default": "esm2-650M",
+          "description": "Protein language model to use for sequence generation"
+        },
+        "sampling_temperature": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.1,
+          "description": "Temperature for sampling during sequence generation"
+        },
+        "bias_temperature": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1.0,
+          "description": "Temperature for bias during sequence generation"
+        },
+        "omit_amino_acids": {
+          "type": "string",
+          "default": "C",
+          "description": "Amino acids to omit from sequence generation"
+        },
+        "target_chain": {
+          "type": "string",
+          "default": "A",
+          "description": "Chain identifier for target protein"
+        },
+        "binder_chain": {
+          "type": "string",
+          "default": "H",
+          "description": "Chain identifier for binder protein"
+        }
+      },
+      "required": ["folding_model"]
+    },
+    "evaluation_config": {
+      "type": "object",
+      "description": "Evaluation configuration",
+      "properties": {
+        "monomer_folding_model": {
+          "type": "string",
+          "enum": ["nbb2", "esmfold"],
+          "default": "nbb2",
+          "description": "Folding model for monomer evaluation"
+        }
+      },
+      "required": ["monomer_folding_model"]
+    },
+    "loss_config": {
+      "type": "object",
+      "description": "Loss configuration with VHH-specific weights",
+      "properties": {
+        "weights_hbond": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2.5,
+          "description": "Weight for hydrogen bond interactions"
+        },
+        "weights_salt_bridge": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2.0,
+          "description": "Weight for salt bridge interactions"
+        }
+      },
+      "required": ["weights_hbond", "weights_salt_bridge"]
+    },
+    "trajectory_config": {
+      "type": "object",
+      "description": "Trajectory configuration with VHH-specific defaults",
+      "properties": {
+        "soft_iters": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 65,
+          "description": "Number of soft iterations"
+        },
+        "temp_iters": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 25,
+          "description": "Number of temperature iterations"
+        },
+        "hard_iters": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Number of hard iterations"
+        },
+        "pssm_iters": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "Number of PSSM iterations"
+        },
+        "greedy_tries": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "Number of greedy attempts"
+        },
+        "early_stop_iptm": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.7,
+          "description": "Early stopping threshold for iPTM score"
+        },
+        "optimizer_type": {
+          "type": "string",
+          "enum": ["adam", "sgd", "schedule_free_adam", "schedule_free_sgd"],
+          "default": "schedule_free_sgd",
+          "description": "Type of optimizer to use"
+        },
+        "optimizer_learning_rate": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.4,
+          "description": "Learning rate for the optimizer"
+        },
+        "optimizer_b1": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.9,
+          "description": "Beta1 parameter for Adam optimizer"
+        },
+        "optimizer_b2": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.999,
+          "description": "Beta2 parameter for Adam optimizer"
+        },
+        "optimizer_eps": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1e-8,
+          "description": "Epsilon parameter for optimizer"
+        },
+        "optimizer_weight_decay": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "default": null,
+          "description": "Weight decay for optimizer (null to disable)"
+        },
+        "optimizer_weight_lr_power": {
+          "type": "number",
+          "minimum": 0,
+          "default": 2.0,
+          "description": "Power for learning rate scheduling"
+        },
+        "optimizer_warmup_steps": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "default": null,
+          "description": "Number of warmup steps (null to disable)"
+        }
+      },
+      "required": [
+        "soft_iters",
+        "temp_iters",
+        "hard_iters",
+        "pssm_iters",
+        "greedy_tries",
+        "early_stop_iptm",
+        "optimizer_type",
+        "optimizer_learning_rate",
+        "optimizer_b1",
+        "optimizer_b2",
+        "optimizer_eps",
+        "optimizer_weight_lr_power"
+      ]
+    }
+  },
+  "required": ["template_config", "evaluation_config", "loss_config", "trajectory_config"],
+  "additionalProperties": false
+}

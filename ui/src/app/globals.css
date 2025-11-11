@@ -1,0 +1,518 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+}
+
+.animate-breathe {
+  animation: breathe 1.5s ease-in-out infinite;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 72.22% 50.59%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5% 64.9%;
+    --radius: 0.5rem;
+
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    --color-1: 0 100% 63%;
+    --color-2: 270 100% 63%;
+    --color-3: 210 100% 63%;
+    --color-4: 195 100% 63%;
+    --color-5: 90 100% 63%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 85.7% 97.3%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+  .theme {
+    --animate-rainbow: rainbow var(--speed, 2s) infinite linear;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply scroll-smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* font-feature-settings: "rlig" 1, "calt" 1; */
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+@layer utilities {
+  .step {
+    counter-increment: step;
+  }
+
+  .step:before {
+    @apply absolute w-9 h-9 bg-muted rounded-full font-mono font-medium text-center text-base inline-flex items-center justify-center -indent-px border-4 border-background;
+    @apply ml-[-50px] mt-[-4px];
+    content: counter(step);
+  }
+
+  .chunk-container {
+    @apply shadow-none;
+  }
+
+  .chunk-container::after {
+    content: "";
+    @apply absolute -inset-4 shadow-xl rounded-xl border;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    @apply px-4;
+  }
+}
+
+.container {
+  width: 100%;
+  margin-right: auto;
+  margin-left: auto;
+  padding-right: 2rem;
+  padding-left: 2rem;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for Edge, Internet Explorer and Firefox */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+/* Custom scrollbar styling for chat area */
+.chat-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.chat-scrollbar::-webkit-scrollbar-thumb:active {
+  background: hsl(var(--muted-foreground) / 0.7);
+}
+
+/* Firefox scrollbar styling */
+.chat-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+}
+
+
+.lucide {
+  width: 1rem;
+  height: 1rem;
+}
+
+
+
+.la-vz-viewer-event-router {
+  position: relative !important;
+}
+
+.la-vz-viewer-container {
+  width: 700px !important;
+}
+
+.la-vz-linear-scroller {
+  overflow: hidden !important;
+}
+
+@theme inline {
+  @keyframes rainbow {
+  0% {
+    background-position: 0%;
+    }
+  100% {
+    background-position: 200%;
+    }
+  }
+}
+
+/* Syntax highlighting for code blocks - Light theme */
+.language-python,
+.language-javascript,
+.language-bash {
+  color: #1f2937; /* Dark gray for light theme */
+}
+
+.language-python .comment,
+.language-javascript .comment,
+.language-bash .comment {
+  color: #6b7280; /* Medium gray for comments */
+  font-style: italic;
+}
+
+.language-python .keyword,
+.language-javascript .keyword,
+.language-bash .keyword {
+  color: #dc2626; /* Red for keywords */
+  font-weight: bold;
+}
+
+.language-python .string,
+.language-javascript .string,
+.language-bash .string {
+  color: #059669; /* Green for strings */
+}
+
+.language-python .function,
+.language-javascript .function {
+  color: #7c3aed; /* Purple for functions */
+}
+
+.language-python .number,
+.language-javascript .number {
+  color: #2563eb; /* Blue for numbers */
+}
+
+.language-python .variable,
+.language-javascript .variable {
+  color: #ea580c; /* Orange for variables */
+}
+
+/* General code block styling */
+pre code {
+  font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+  line-height: 1.5;
+  font-size: 0.875rem;
+}
+
+/* Dark theme code block styling */
+.dark .language-python,
+.dark .language-javascript,
+.dark .language-bash {
+  color: #e6edf3; /* Light gray for dark theme */
+}
+
+.dark .language-python .comment,
+.dark .language-javascript .comment,
+.dark .language-bash .comment {
+  color: #7d8590; /* Medium gray for comments */
+}
+
+.dark .language-python .keyword,
+.dark .language-javascript .keyword,
+.dark .language-bash .keyword {
+  color: #ff7b72; /* Light red for keywords */
+}
+
+.dark .language-python .string,
+.dark .language-javascript .string,
+.dark .language-bash .string {
+  color: #a5d6ff; /* Light blue for strings */
+}
+
+.dark .language-python .function,
+.dark .language-javascript .function {
+  color: #d2a8ff; /* Light purple for functions */
+}
+
+.dark .language-python .number,
+.dark .language-javascript .number {
+  color: #79c0ff; /* Light blue for numbers */
+}
+
+.dark .language-python .variable,
+.dark .language-javascript .variable {
+  color: #ffa657; /* Light orange for variables */
+}
+
+/* Table styling for dark mode visibility */
+.dark table th {
+  color: #e5e7eb !important; /* Light gray for headers in dark mode */
+}
+
+.dark table td {
+  color: #f3f4f6 !important; /* Very light gray for table cells in dark mode */
+}
+
+.dark table {
+  border-color: #4b5563 !important; /* Darker borders in dark mode */
+}
+
+.dark table th,
+.dark table td {
+  border-color: #4b5563 !important; /* Darker cell borders in dark mode */
+}
+
+/* Table hover states for dark mode */
+.dark table tr:hover th {
+  background-color: #374151 !important; /* Darker gray for header hover */
+  color: #f9fafb !important; /* Very light text on hover */
+}
+
+.dark table tr:hover td {
+  background-color: #374151 !important; /* Darker gray for cell hover */
+  color: #f9fafb !important; /* Very light text on hover */
+}
+
+/* NanoProteinViewer containment for Mol* UI panels so they never bleed over header */
+.molstar-box {
+  position: relative;
+  overflow: hidden;
+}
+.molstar-box .msp-plugin {
+  /* Ensure plugin anchors to this box */
+  position: absolute;
+  inset: 0;
+}
+/* Hide "standard-outside" top/bottom panels that are positioned with negative offsets */
+.molstar-box .msp-plugin .msp-layout-standard-outside .msp-layout-top {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 97px !important;
+  border-left: none !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+}
+
+/* Keep bottom outside panel hidden to maximize viewport height */
+.molstar-box .msp-plugin .msp-layout-standard-outside .msp-layout-bottom {
+  display: none !important;
+}
+
+/* Push main viewport down to make room for the top panel inside the box */
+.molstar-box .msp-plugin .msp-layout-standard-outside .msp-layout-main {
+  position: absolute !important;
+  inset: 97px 0 0 0 !important;
+}
+
+/* Py2Dmol viewer styles */
+.py2dmol-viewer-instance * {
+  box-sizing: border-box;
+}
+.py2dmol-viewer-instance {
+  position: relative;
+  font-family: 'Inter', sans-serif;
+  background: transparent;
+  display: inline-block;
+  line-height: 0;
+}
+.py2dmol-viewer-instance #mainContainer {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 24px;
+  background: transparent;
+}
+.py2dmol-viewer-instance #viewerColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.py2dmol-viewer-instance #canvas {
+  background: #ffffff;
+  cursor: grab;
+  display: block;
+  touch-action: none;
+}
+.py2dmol-viewer-instance #canvas:active {
+  cursor: grabbing;
+}
+.py2dmol-viewer-instance #rightPanelContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 324px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+.py2dmol-viewer-instance .controlButton {
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 80px;
+  background: linear-gradient(to bottom, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.py2dmol-viewer-instance .controlButton i { font-size: 14px; line-height: 1; }
+.py2dmol-viewer-instance .controlButton:hover { background: linear-gradient(to bottom, #2563eb, #1d4ed8); box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1); transform: translateY(-1px); }
+.py2dmol-viewer-instance .controlButton:active { transform: translateY(0); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
+.py2dmol-viewer-instance .controlButton:disabled { background: linear-gradient(to bottom, #e5e7eb, #d1d5db); cursor: not-allowed; color: #9ca3af; box-shadow: none; transform: none; }
+
+.py2dmol-viewer-instance { --btn-h: 36px; --btn-radius: 9999px; --gap: 8px; }
+.py2dmol-viewer-instance .toolbar-row { display: flex; gap: var(--gap); }
+.py2dmol-viewer-instance .toolbar-row > * { flex: 1 1 0; min-width: 0; }
+#prevObjectButton, #nextObjectButton { flex: 0 0 48px; padding: 0; text-align: center; }
+.py2dmol-viewer-instance .nav-button { height: var(--btn-h); line-height: var(--btn-h); border-radius: var(--btn-radius); font-weight: 600; padding: 0 14px; border: none; cursor: pointer; transition: all 0.2s; text-align: center; }
+.py2dmol-viewer-instance .btn-grey { background: #e5e7eb; color: #374151; }
+.py2dmol-viewer-instance .btn-grey:hover { background: #d1d5db; }
+.py2dmol-viewer-instance .btn-grey:active { background: #cbd5e1; transform: translateY(1px); }
+.py2dmol-viewer-instance .nav-button.active { background: linear-gradient(to bottom, #10b981, #059669); }
+.py2dmol-viewer-instance .nav-button.active:hover { background: linear-gradient(to bottom, #059669, #047857); }
+
+/* Toggle switches */
+.switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider-toggle { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #cbd5e1; transition: .3s; border-radius: 24px; }
+.slider-toggle:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); }
+.switch input:checked + .slider-toggle { background-color: #3b82f6; }
+.switch input:focus + .slider-toggle { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); }
+.switch input:checked + .slider-toggle:before { transform: translateX(20px); }
+
+/* Button-style toggles */
+.py2dmol-viewer-instance .btn-toggle { position: relative; padding: 0; border-radius: var(--btn-radius); background: transparent; box-shadow: none; height: var(--btn-h); }
+.py2dmol-viewer-instance .btn-toggle input[type="checkbox"] { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.py2dmol-viewer-instance .btn-toggle > span { display: flex; align-items: center; justify-content: center; height: var(--btn-h); padding: 0 14px; border-radius: inherit; background: #e5e7eb; color: #374151; }
+.py2dmol-viewer-instance .btn-toggle input:checked + span { background: #10b981; color: #fff; }
+.py2dmol-viewer-instance .btn-toggle input:not(:checked) + span:hover { background: #d1d5db; }
+.py2dmol-viewer-instance .btn-toggle input:checked + span:hover { background: #059669; }
+
+/* Sliders */
+.py2dmol-viewer-instance #frameSlider { height: 6px; -webkit-appearance: none; appearance: none; background: #e5e7eb; border-radius: 3px; outline: none; flex-grow: 1; margin: 0 12px; vertical-align: middle; }
+.py2dmol-viewer-instance #frameSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); transition: all 0.2s; }
+.py2dmol-viewer-instance #frameSlider::-webkit-slider-thumb:hover { background: #2563eb; transform: scale(1.1); }
+.py2dmol-viewer-instance #frameSlider::-moz-range-thumb { width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; cursor: pointer; border: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); transition: all 0.2s; }
+.py2dmol-viewer-instance #frameSlider::-moz-range-thumb:hover { background: #2563eb; transform: scale(1.1); }
+.py2dmol-viewer-instance #lineWidthSlider { height: 6px; -webkit-appearance: none; appearance: none; background: #e5e7eb; border-radius: 3px; outline: none; flex-grow: 1; margin-top: 0; }
+.py2dmol-viewer-instance #lineWidthSlider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); transition: all 0.2s; }
+.py2dmol-viewer-instance #lineWidthSlider::-webkit-slider-thumb:hover { background: #2563eb; transform: scale(1.1); }
+.py2dmol-viewer-instance #lineWidthSlider::-moz-range-thumb { width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; cursor: pointer; border: none; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); transition: all 0.2s; }
+.py2dmol-viewer-instance #lineWidthSlider::-moz-range-thumb:hover { background: #2563eb; transform: scale(1.1); }
+
+/* Selects */
+.py2dmol-viewer-instance #colorSelect, .py2dmol-viewer-instance #objectSelect { font-size: 14px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; color: #374151; cursor: pointer; transition: all 0.2s; flex-grow: 1; width: 170px; min-width: 150px; flex-shrink: 0; }
+.py2dmol-viewer-instance #colorSelect:hover, .py2dmol-viewer-instance #objectSelect:hover { border-color: #9ca3af; }
+.py2dmol-viewer-instance #colorSelect:focus, .py2dmol-viewer-instance #objectSelect:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); outline: none; }
+.py2dmol-viewer-instance #speedSelect { font-size: 14px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; color: #374151; cursor: pointer; transition: all 0.2s; min-width: 70px; }
+.py2dmol-viewer-instance #speedSelect:hover { border-color: #9ca3af; }
+.py2dmol-viewer-instance #speedSelect:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); outline: none; }
+
+/* Containers */
+.py2dmol-viewer-instance #navigationControls.toolbar { display: flex; flex-direction: column; gap: 6px; }
+.py2dmol-viewer-instance .control-group { display: flex; flex-direction: column; gap: 5px; }
+.py2dmol-viewer-instance .toggle-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+.py2dmol-viewer-instance .toggle-item > label { font-weight: 500; color: #374151; font-size: 14px; text-align: left; flex-shrink: 1; line-height: 1.5; margin: 0; }
+.py2dmol-viewer-instance #frameCounter { color: #374151; min-width: 100px; font-weight: 500; font-size: 14px; }
+
+/* PAE */
+.py2dmol-viewer-instance #paeContainer { display: none; flex-shrink: 0; width: 296px; height: 296px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; background: #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06); margin: 12px auto 0 auto; }
+
+/* Dark theme overrides */
+.dark .py2dmol-viewer-instance #canvasContainer { background: hsl(var(--card)); border-color: hsl(var(--border)); }
+.dark .py2dmol-viewer-instance #canvas { background: hsl(var(--card)); }
+.dark .py2dmol-viewer-instance #rightPanelContainer { background: hsl(var(--card)); border-color: hsl(var(--border)); }
+.dark .py2dmol-viewer-instance #paeContainer { background: hsl(var(--card)); border-color: hsl(var(--border)); }
+
+/* Fullscreen mode overrides */
+#mainContainer.py2dmol-fullscreen { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; gap: 0; }
+#mainContainer.py2dmol-fullscreen #viewerColumn { width: 100%; max-width: 100%; min-width: 0; }
+#mainContainer.py2dmol-fullscreen #canvasContainer { width: 100%; height: 100%; border: none; background: hsl(var(--card)); }
+#mainContainer.py2dmol-fullscreen #rightPanelContainer { display: none !important; }
+
+/* Two-column grid: 80% viewer, 20% controls */
+#viewer-container.py2dmol-grid { display: grid !important; grid-template-columns: 3fr 1fr !important; width: 100%; height: 100%; }
+#viewer-container.py2dmol-grid > #mainContainer { grid-column: 1; grid-row: 1; height: 100%; width: 100%; }
+
