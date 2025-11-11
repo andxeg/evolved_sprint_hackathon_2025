@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d evolved-hackathon"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    volumes:
+      - evolved-hackathon-db-data:/var/lib/postgresql/data/pgdata
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_PASSWORD=changethis
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=evolved-hackathon
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - "5432:5432"
+    networks:
+      shared-network-evolved-hackathon:
+        aliases: [db] # <- other stacks can resolve "db"
+
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      shared-network-evolved-hackathon:
+        aliases: [redis]
+
+  api:
+    restart: always
+    command: sanic server:create_app --host 0.0.0.0 --port 8000
+    depends_on:
+      - db
+      - redis
+    build:
+      context: ./
+    environment:
+      - ENV_FOR_DYNACONF=docker
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # allows container -> host
+    ports:
+      - "8000:8000"
+    networks:
+      shared-network-evolved-hackathon:
+        aliases: [api]
+
+
+volumes:
+  evolved-hackathon-db-data:
+
+networks:
+  shared-network-evolved-hackathon:
+    external: true

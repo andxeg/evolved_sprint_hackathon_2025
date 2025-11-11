@@ -1,0 +1,162 @@
+import json
+import uuid
+from http import HTTPStatus
+from pathlib import Path
+from typing import Any
+
+import msgspec
+from sanic import Blueprint, response
+from sanic.exceptions import SanicException
+from sanic.request import Request
+from sanic.views import HTTPMethodView
+from sanic_ext import validate
+from sanic_ext.extensions.openapi import openapi
+
+from api.design.serializers import DesignInput
+from core.config import settings
+
+
+class ErrorResponse(msgspec.Struct):
+    message: str
+
+
+class NotFoundResponse(ErrorResponse):
+    pass
+
+
+design_v1 = Blueprint("design", version=1)
+
+
+class DesignView(HTTPMethodView):
+    @validate(json=DesignInput)
+    async def post(self, request: Request, body: DesignInput) -> Any:
+        """
+        Create a new design
+        """
+
+        print(body)
+        return response.json({"message": "Design created successfully"})
+
+
+class DesignFileView(HTTPMethodView):
+    @openapi.definition(
+        response={
+            200: dict[str, Any],
+            400: ErrorResponse,
+            404: ErrorResponse,
+        },
+    )
+    async def post(self, request: Request) -> Any:
+        """
+        Upload one or more files to the uploads folder.
+        Accepts multipart/form-data with one or multiple 'files' fields.
+        Files are saved to OUTPUT_DIR/uploads/ using a unique filename (uuid_prefix_original.ext).
+        """
+        # Validate files presence
+        if not request.files:
+            raise SanicException(status_code=HTTPStatus.BAD_REQUEST, message="No files provided")
+
+        # Collect files from request
+        files_lists: list[list[Any]] = []
+        explicit = request.files.get("files")
+        if explicit:
+            # Sanic may return a single File or a list
+            if isinstance(explicit, list):
+                files_lists.append(explicit)
+            else:
+                files_lists.append([explicit])
+        else:
+            # Collect all lists from request.files (for clients using different field names)
+            for k in request.files.keys():
+                vals = request.files.get(k)
+                if vals:
+                    if isinstance(vals, list):
+                        files_lists.append(vals)
+                    else:
+                        files_lists.append([vals])
+
+        if not files_lists:
+            raise SanicException(status_code=HTTPStatus.BAD_REQUEST, message="No files found in request")
+
+        # Create uploads folder in OUTPUT_DIR
+        output_dir = Path(settings.OUTPUT_DIR)
+        uploads_folder = output_dir / "uploads"
+        uploads_folder.mkdir(parents=True, exist_ok=True)
+
+        # Collect optional extra fields from multipart form
+        extra_fields: dict[str, Any] = {}
+        try:
+            form_data: dict[str, Any] = request.form or {}
+        except Exception:
+            form_data = {}
+
+        if hasattr(form_data, "items"):
+            for key, raw_value in form_data.items():
+                # Sanic may return single str or list[str]
+                value = raw_value[0] if isinstance(raw_value, list) and raw_value else raw_value
+                if value is None:
+                    continue
+                parsed: Any = value
+                # Attempt JSON parse for any key ending with _json
+                if isinstance(value, str) and key.endswith("_json"):
+                    try:
+                        parsed = json.loads(value)
+                    except Exception:
+                        parsed = value
+                extra_fields[key] = parsed
+
+        # Upload files to local folder
+        stored_file_entries: list[dict[str, Any]] = []
+        for files_field in files_lists:
+            for file_obj in files_field:
+                if not (file_obj and hasattr(file_obj, "name") and hasattr(file_obj, "body")):
+                    continue
+
+                original_name = file_obj.name or "file"
+                # Extract base name
+                if "/" in original_name:
+                    original_name = original_name.split("/")[-1]
+                elif "\\" in original_name:
+                    original_name = original_name.split("\\")[-1]
+
+                # Make unique filename
+                unique_prefix = uuid.uuid4().hex
+                stored_name = f"{unique_prefix}_{original_name}"
+                file_path = uploads_folder / stored_name
+
+                body_bytes = getattr(file_obj, "body", None)
+                # Allow zero-length files; only skip when body is None (missing)
+                if body_bytes is None:
+                    continue
+
+                try:
+                    # Write file to local folder
+                    with open(file_path, "wb") as f:
+                        f.write(body_bytes)
+
+                    entry: dict[str, Any] = {"file_name": stored_name}
+                    # Merge optional extra form fields into each entry
+                    if extra_fields:
+                        entry.update(extra_fields)
+                    stored_file_entries.append(entry)
+                except Exception as e:
+                    raise SanicException(
+                        status_code=HTTPStatus.INTERNAL_SERVER_ERROR, message=f"File upload failed: {e}"
+                    )
+
+        if not stored_file_entries:
+            raise SanicException(status_code=HTTPStatus.BAD_REQUEST, message="No valid files to upload")
+
+        # Return uploaded files info
+        return response.json(
+            {
+                "message": "Files uploaded successfully",
+                "files": stored_file_entries,
+                "folder": str(uploads_folder),
+            },
+            status=HTTPStatus.OK,
+        )
+
+
+design_v1.add_route(DesignView.as_view(), "/design")
+design_v1.add_route(DesignFileView.as_view(), "/upload")

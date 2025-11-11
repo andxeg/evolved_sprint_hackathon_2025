@@ -1,0 +1,48 @@
+[global]
+# Application Settings
+PROJECT_NAME = "Evolved Hackathon API"
+HOST_API = "http://localhost:8000"
+
+LOCAL_OUTPUT_PATH = "/Users/juliocesar/Data/evolved-hackathon-results"
+DOCKER_OUTPUT_PATH = "/mnt/shared"
+
+[local]
+# Environment Settings
+ENVIRONMENT = "local"
+DEV_ENVIRONMENT = "local"
+
+CORS_ORIGINS = "http://localhost:3000"
+
+# Database Settings
+POSTGRES_SERVER = "localhost"
+POSTGRES_PORT = 5432
+POSTGRES_DB = "evolved-hackathon"
+POSTGRES_USER = "postgres"
+POSTGRES_PASSWORD = "changethis"
+POSTGRES_SSL_MODE = "require"
+
+
+# Redis and Celery Settings
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+
+[docker]
+# Environment Settings
+ENVIRONMENT = "docker"
+DEV_ENVIRONMENT = "dev"
+
+
+CORS_ORIGINS = "http://localhost:3000"
+
+# Database Settings
+POSTGRES_SERVER = "db"
+POSTGRES_PORT = 5432
+POSTGRES_DB = "evolved-hackathon"
+POSTGRES_USER = "postgres"
+POSTGRES_PASSWORD = "changethis"
+POSTGRES_SSL_MODE = "require"
+
+
+# Redis and Celery Settings
+REDIS_HOST = "redis"
+REDIS_PORT = 6379
