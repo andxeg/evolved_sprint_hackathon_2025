@@ -23,10 +23,12 @@ import { useParams,useRouter } from 'next/navigation'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useToast } from '@/hooks/use-toast'
 
 // Import extracted components and utilities
 import { getLayoutedElements } from '../../utils/layoutUtils'
@@ -45,6 +47,7 @@ import { validateAndCleanYamlContent,validateYamlContent } from './utils/yaml-va
 export default function PipelineEditorPage() {
   const router = useRouter()
   const params = useParams()
+  const { toast } = useToast()
   const pipelineId = params.id as string
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [pipelineData, setPipelineData] = useState<any>(null)
@@ -78,6 +81,10 @@ export default function PipelineEditorPage() {
   const [yamlValidationResult, setYamlValidationResult] = useState<any>(null)
   const [yamlSaveMessage, setYamlSaveMessage] = useState<string | null>(null)
   const [yamlIsResetting, setYamlIsResetting] = useState(false)
+
+  // CIF viewer modal state
+  const [showCifViewer, setShowCifViewer] = useState(false)
+  const [cifViewerUrl, setCifViewerUrl] = useState<string | null>(null)
 
   // React Flow state
   const [nodes, setNodes] = useState<Node[]>([])
@@ -330,6 +337,74 @@ export default function PipelineEditorPage() {
     })
   }
 
+  const handleLoadExampleDesign = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      
+      // Step 1: Fetch the CIF file from public folder
+      const cifResponse = await fetch('/examples/5cqg.cif')
+      if (!cifResponse.ok) {
+        throw new Error('Failed to fetch example CIF file')
+      }
+      
+      const cifBlob = await cifResponse.blob()
+      const cifFile = new File([cifBlob], '5cqg.cif', { type: 'chemical/x-cif' })
+      
+      // Step 2: Upload CIF file to API
+      const formData = new FormData()
+      formData.append('file', cifFile)
+      
+      const uploadResponse = await fetch(`${apiUrl}/v1/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!uploadResponse.ok) {
+        throw new Error(`CIF upload failed: ${uploadResponse.statusText}`)
+      }
+      
+      const uploadData = await uploadResponse.json()
+      const uploadedFilename = uploadData.files?.[0]?.file_name || '5cqg.cif'
+      
+      // Step 3: Create entities based on example YAML structure
+      const exampleEntities: Entity[] = [
+        {
+          type: 'protein',
+          id: 'G',
+          sequence: '12..20'
+        },
+        {
+          type: 'file',
+          path: uploadedFilename,
+          uploadedFilename: uploadedFilename,
+          uploadedFile: cifFile,
+          include: [
+            { id: 'A' }
+          ],
+          binding_types_chain: [
+            { id: 'A', binding: '343,344,251' }
+          ],
+          structure_groups: 'all'
+        }
+      ]
+      
+      // Step 4: Update entities and YAML
+      handleEntitiesChange(exampleEntities)
+      
+      toast({
+        title: "Example loaded",
+        description: "Example design loaded successfully!",
+      })
+    } catch (error) {
+      console.error('Error loading example design:', error)
+      toast({
+        title: "Error",
+        description: `Failed to load example: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    }
+  }
+
   // Form validation function
   const isFormValid = () => {
     // Check if entities are defined (for design pipeline)
@@ -419,11 +494,31 @@ export default function PipelineEditorPage() {
       const designData = await designResponse.json()
       console.log('Design created:', designData)
       
-      // TODO: Handle success (e.g., redirect, show success message)
-      alert('Workflow started successfully!')
+      // Check if validation passed and extract CIF URL
+      if (designData.check_passed && designData.cif_url) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const fullCifUrl = `${apiUrl}${designData.cif_url}`
+        const viewerUrl = `https://nano-protein-viewer-react.juliocesar.io/?from=remote_url&url=${encodeURIComponent(fullCifUrl)}`
+        
+        setCifViewerUrl(viewerUrl)
+        setShowCifViewer(true)
+        toast({
+          title: "Validation successful",
+          description: "Design validation completed successfully!",
+        })
+      } else {
+        toast({
+          title: "Validation successful",
+          description: "Design validation completed successfully!",
+        })
+      }
     } catch (error) {
       console.error('Error starting workflow:', error)
-      alert(`Failed to start workflow: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast({
+        title: "Error",
+        description: `Failed to start workflow: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
     }
   }
 
@@ -774,26 +869,8 @@ export default function PipelineEditorPage() {
                     <DesignStepForm
                       entities={entities}
                       onEntitiesChange={handleEntitiesChange}
-                      onValidate={() => {
-                        // Sync entities to YAML and validate
-                        const newYaml = entitiesToYaml(entities)
-                        setVhhConfigYaml(newYaml)
-                        setYamlHasChanges(true)
-                        
-                        // Validate the YAML content
-                        const result = validateYamlContent(newYaml)
-                        setYamlValidationResult(result)
-                        
-                        // Show validation message
-                        if (result.isValid) {
-                          setYamlSaveMessage('Design validated successfully!')
-                        } else {
-                          setYamlSaveMessage(`Validation failed: ${result.errors?.join(', ') || 'Invalid design'}`)
-                        }
-                        
-                        // Clear message after 3 seconds
-                        setTimeout(() => setYamlSaveMessage(null), 3000)
-                      }}
+                      onValidate={handleRun}
+                      onLoadExample={handleLoadExampleDesign}
                     />
                   ) : (
                     <>
@@ -1050,6 +1127,28 @@ export default function PipelineEditorPage() {
           </div>
         )}
       </div>
+
+      {/* CIF Viewer Modal */}
+      <Dialog open={showCifViewer} onOpenChange={setShowCifViewer}>
+        <DialogContent className="max-w-[95vw] !max-w-[95vw] w-[95vw] h-[95vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
+            <DialogTitle>Design Visualization</DialogTitle>
+            <p className="text-sm text-muted-foreground mt-2">
+              The binding site should be highlighting a different color than the rest of the target.
+            </p>
+          </DialogHeader>
+          <div className="flex-1 px-6 pb-6 min-h-0 overflow-hidden">
+            {cifViewerUrl && (
+              <iframe
+                src={cifViewerUrl}
+                className="w-full h-full border-0 rounded-lg"
+                title="Protein Structure Viewer"
+                allowFullScreen
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
