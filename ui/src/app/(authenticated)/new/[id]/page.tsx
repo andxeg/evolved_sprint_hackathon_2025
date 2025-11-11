@@ -20,7 +20,6 @@ import {
   Settings2,
   X} from 'lucide-react'
 import { useParams,useRouter } from 'next/navigation'
-import { useTheme } from 'next-themes'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -46,7 +45,6 @@ import { validateAndCleanYamlContent,validateYamlContent } from './utils/yaml-va
 export default function PipelineEditorPage() {
   const router = useRouter()
   const params = useParams()
-  const { theme } = useTheme()
   const pipelineId = params.id as string
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [pipelineData, setPipelineData] = useState<any>(null)
@@ -85,8 +83,8 @@ export default function PipelineEditorPage() {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
 
-  // Convert theme to React Flow colorMode
-  const colorMode: ColorMode = theme === 'dark' ? 'dark' : 'light'
+  // React Flow colorMode - always dark
+  const colorMode: ColorMode = 'dark'
 
   // Function to generate auto pipeline name
   const generatePipelineName = useCallback(() => {
