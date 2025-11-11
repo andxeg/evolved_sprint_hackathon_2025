@@ -37,6 +37,7 @@ import { ParametersTab } from './components/ParametersTab'
 // Import new components
 import { PipelineHeader } from './components/PipelineHeader'
 import PipelineJobConfig from './components/PipelineJobConfig'
+import { DesignStepForm, type Entity } from './components/DesignStepForm'
 import { fetchVHHConfig } from './utils/configLoader'
 import { validateAndCleanYamlContent,validateYamlContent } from './utils/yaml-validator'
 
@@ -64,6 +65,9 @@ export default function PipelineEditorPage() {
     target_hotspot_residues: '',
     masked_binder_seq: ''
   })
+
+  // Entities state for design step
+  const [entities, setEntities] = useState<Entity[]>([])
 
   const yamlTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -161,10 +165,10 @@ export default function PipelineEditorPage() {
       setNodes(layoutedNodes)
       setEdges(layoutedEdges)
       
-      // Auto-select the "Input: Target Protein" node to open the form by default
-      const inputNode = layoutedNodes.find(node => node.data?.label === 'Input: Target Protein')
-      if (inputNode) {
-        setSelectedNode(inputNode)
+      // Auto-select the "[1] Design" node to open the form by default
+      const designNode = layoutedNodes.find(node => node.data?.type === 'design')
+      if (designNode) {
+        setSelectedNode(designNode)
       }
     } else {
       // Redirect to pipelines page if pipeline not found
@@ -327,6 +331,20 @@ export default function PipelineEditorPage() {
 
   // Form validation function
   const isFormValid = () => {
+    // For design step, check if entities are defined
+    if (selectedNode?.data?.type === 'design') {
+      return entities.length > 0 && entities.every(entity => {
+        if (entity.type === 'protein') {
+          return entity.id && entity.sequence
+        } else if (entity.type === 'ligand') {
+          return (entity.id || (entity.ids && entity.ids.length > 0)) && (entity.ccd || entity.smiles)
+        } else if (entity.type === 'file') {
+          return entity.path
+        }
+        return false
+      })
+    }
+    // For other nodes, use old validation (if needed)
     return targetFormData.target_id.trim() !== '' &&
            targetFormData.target_name.trim() !== '' &&
            targetFormData.region.trim() !== '' &&
@@ -358,6 +376,87 @@ export default function PipelineEditorPage() {
   const _handleSaveChanges = () => {
     console.log('Saving changes...')
     // Implement save logic
+  }
+
+  // Convert entities to YAML format
+  const entitiesToYaml = (entities: Entity[]): string => {
+    if (entities.length === 0) {
+      return `entities:
+  # Add your entities here (proteins, ligands, files)
+
+constraints:
+  # Add your constraints here (bonds, total_len)
+`
+    }
+
+    let yaml = 'entities:\n'
+    
+    entities.forEach((entity) => {
+      if (entity.type === 'protein') {
+        yaml += '  - protein:\n'
+        if (entity.id) yaml += `      id: ${entity.id}\n`
+        if (entity.sequence) yaml += `      sequence: ${entity.sequence}\n`
+        if (entity.cyclic) yaml += `      cyclic: ${entity.cyclic}\n`
+        if (entity.binding_types) {
+          if (typeof entity.binding_types === 'string') {
+            yaml += `      binding_types: ${entity.binding_types}\n`
+          }
+        }
+        if (entity.secondary_structure) {
+          yaml += `      secondary_structure: ${entity.secondary_structure}\n`
+        }
+      } else if (entity.type === 'ligand') {
+        yaml += '  - ligand:\n'
+        if (entity.ids && entity.ids.length > 0) {
+          yaml += `      id: [${entity.ids.join(', ')}]\n`
+        } else if (entity.id) {
+          yaml += `      id: ${entity.id}\n`
+        }
+        if (entity.ccd) yaml += `      ccd: ${entity.ccd}\n`
+        if (entity.smiles) yaml += `      smiles: '${entity.smiles}'\n`
+        if (entity.binding_types) {
+          if (typeof entity.binding_types === 'string') {
+            yaml += `      binding_types: ${entity.binding_types}\n`
+          }
+        }
+      } else if (entity.type === 'file') {
+        yaml += '  - file:\n'
+        if (entity.path) yaml += `      path: ${entity.path}\n`
+        if (entity.include && entity.include.length > 0) {
+          yaml += '      include:\n'
+          entity.include.forEach((inc) => {
+            yaml += `        - chain:\n`
+            yaml += `            id: ${inc.id}\n`
+            if (inc.res_index) yaml += `            res_index: ${inc.res_index}\n`
+          })
+        }
+        if (entity.exclude && entity.exclude.length > 0) {
+          yaml += '      exclude:\n'
+          entity.exclude.forEach((exc) => {
+            yaml += `        - chain:\n`
+            yaml += `            id: ${exc.id}\n`
+            if (exc.res_index) yaml += `            res_index: ${exc.res_index}\n`
+          })
+        }
+      }
+    })
+
+    yaml += '\nconstraints:\n'
+    yaml += '  # Add your constraints here (bonds, total_len)\n'
+
+    return yaml
+  }
+
+  // Handle entities change and update YAML
+  const handleEntitiesChange = (newEntities: Entity[]) => {
+    setEntities(newEntities)
+    const newYaml = entitiesToYaml(newEntities)
+    setVhhConfigYaml(newYaml)
+    setYamlHasChanges(true)
+    
+    // Validate the YAML content
+    const result = validateYamlContent(newYaml)
+    setYamlValidationResult(result)
   }
 
   const handleYamlChange = (value: string) => {
@@ -558,7 +657,7 @@ export default function PipelineEditorPage() {
 
         {/* Floating Form Panel */}
         {selectedNode && activeTab !== 'parameters' && (
-          <div className="absolute top-4 right-4 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10">
+          <div className={`absolute top-4 right-4 ${selectedNode.data?.type === 'design' ? 'w-[600px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
             <div className="p-4 h-full flex flex-col">
               {/* Floating Form Header */}
               <div className="flex items-center justify-between mb-3 flex-shrink-0">
@@ -578,10 +677,18 @@ export default function PipelineEditorPage() {
               {/* Floating Form Content - Scrollable Area */}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="space-y-4">
-                  {/* Selected Node Details */}
-                  <div className="space-y-3">
-                    {/* Show Label and Description for non-input nodes */}
-                    {selectedNode.data?.label !== 'Input: Target Protein' && (
+                  {/* Design Step Form */}
+                  {selectedNode.data?.type === 'design' ? (
+                    <DesignStepForm
+                      entities={entities}
+                      onEntitiesChange={handleEntitiesChange}
+                    />
+                  ) : (
+                    <>
+                      {/* Selected Node Details */}
+                      <div className="space-y-3">
+                        {/* Show Label and Description for non-input nodes */}
+                        {selectedNode.data?.label !== 'Input: Target Protein' && (
                       <>
                         <div>
                           <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400">Description</h4>
@@ -760,7 +867,9 @@ export default function PipelineEditorPage() {
                         </form>
                       </div>
                     )}
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

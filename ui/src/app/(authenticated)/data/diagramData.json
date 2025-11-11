@@ -6,85 +6,59 @@
         "type": "input",
         "position": { "x": 200, "y": 50 },
         "data": {
-          "label": "Input: Target Protein",
-          "type": "target-selection",
-          "description": "Analyze target protein structure and select epitopes",
-          "model": "AlphaFold-Multimer"
+          "label": "Design",
+          "type": "design",
+          "description": "Define entities (proteins, ligands, files) and constraints for the design specification"
         }
       },
       {
         "id": "2",
-        "type": "model",
-        "position": { "x": 400, "y": 200 },
+        "type": "process",
+        "position": { "x": 400, "y": 50 },
         "data": {
-          "label": "Model load: esm2-650M",
-          "type": "model-load",
-          "description": "Initialize ESM2-650M model",
-          "model": "esm2-650M",
-          "model_options": [
-            {
-              "value": "esm2-650M",
-              "label": "esm2-650M",
-              "params": "650M",
-              "gpu_usage": "3.46 GB",
-              "load_time": "2.8s - 3.0s"
-            }
-          ]
+          "label": "Inverse Folding",
+          "type": "inverse-folding",
+          "description": "Inverse folding step"
         }
       },
       {
         "id": "3",
-        "type": "model",
-        "position": { "x": 600, "y": 200 },
+        "type": "process",
+        "position": { "x": 600, "y": 50 },
         "data": {
-          "label": "Model load: nbb2",
-          "type": "model-load",
-          "description": "Initialize folding model",
-          "model": "nbb2",
-          "model_options": [
-            {
-              "value": "nbb2",
-              "label": "nbb2",
-              "params": "14M",
-              "gpu_usage": "1.54 GB",
-              "load_time": "1.6s - 2.0s"
-            },
-            {
-              "value": "esmfold",
-              "label": "esmfold",
-              "params": "3B",
-              "gpu_usage": "14.1 GB",
-              "load_time": "11.7s - 12.0s"
-            }
-          ]
+          "label": "Folding",
+          "type": "folding",
+          "description": "Folding step"
         }
       },
       {
         "id": "4",
         "type": "process",
-        "position": { "x": 500, "y": 350 },
+        "position": { "x": 800, "y": 50 },
         "data": {
-          "label": "Process: Template Run",
-          "type": "template-run",
-          "description": "Process template and generate optimized sequences",
-          "substeps": [
-            "Process targets",
-            "Process hotspots", 
-            "Create truncation"
-          ],
-          "outputs": "design_state",
-          "load_time": "8.1s - 9.0s"
+          "label": "Design Folding",
+          "type": "design-folding",
+          "description": "Design folding step"
         }
       },
       {
         "id": "5",
-        "type": "model",
-        "position": { "x": 500, "y": 500 },
+        "type": "process",
+        "position": { "x": 1000, "y": 50 },
         "data": {
-          "label": "Experimental Validation",
-          "type": "validation",
-          "description": "Phage display screening and binding validation",
-          "model": "Phage Display"
+          "label": "Analysis",
+          "type": "analysis",
+          "description": "Analysis step"
+        }
+      },
+      {
+        "id": "6",
+        "type": "process",
+        "position": { "x": 1200, "y": 50 },
+        "data": {
+          "label": "Filtering",
+          "type": "filtering",
+          "description": "Filtering step"
         }
       }
     ],
@@ -97,16 +71,9 @@
         "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
       },
       { 
-        "id": "e1-3", 
-        "source": "1", 
-        "target": "3", 
-        "animated": true, 
-        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
-      },
-      { 
-        "id": "e2-4", 
+        "id": "e2-3", 
         "source": "2", 
-        "target": "4", 
+        "target": "3", 
         "animated": true, 
         "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
       },
@@ -121,8 +88,15 @@
         "id": "e4-5", 
         "source": "4", 
         "target": "5", 
-        "animated": false, 
-        "style": { "stroke": "#10b981", "strokeWidth": 2 } 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e5-6", 
+        "source": "5", 
+        "target": "6", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
       }
     ]
   }
