@@ -273,53 +273,58 @@ class DesignFileServeView(HTTPMethodView):
             404: NotFoundResponse,
         },
     )
-    async def get(self, request: Request, folder: str, filename: str) -> Any:
+    async def get(self, request: Request, file_path: str) -> Any:
         """
-        Serve a file from the OUTPUT_DIR by folder and filename.
+        Serve a file from the OUTPUT_DIR by path.
+        
+        Supports both simple paths (e.g., /files/checks/file.cif) and nested paths
+        (e.g., /files/boltzgen_outputs/job_id/final_ranked_designs/file.csv).
         
         Parameters
         ----------
-        folder : str
-            The folder name (e.g., "checks", "uploads")
-        filename : str
-            The filename to serve
+        file_path : str
+            Relative path from OUTPUT_DIR (e.g., "checks/file.cif" or "boltzgen_outputs/job_id/final_ranked_designs/file.csv")
         """
-        # Validate folder name to prevent directory traversal
-        allowed_folders = {"checks", "uploads"}
-        if folder not in allowed_folders:
+        # Build file path
+        output_dir = Path(settings.OUTPUT_DIR)
+        # Split the path and join it safely
+        path_parts = file_path.split("/")
+        full_path = output_dir / Path(*path_parts)
+        
+        # Security check: ensure the file is within the allowed directory
+        try:
+            full_path.resolve().relative_to(output_dir.resolve())
+        except ValueError:
+            raise SanicException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                message="Invalid file path - path must be within output directory",
+            )
+        
+        # Validate that the first folder is allowed
+        first_folder = path_parts[0] if path_parts else None
+        allowed_folders = {"checks", "uploads", "boltzgen_outputs"}
+        if first_folder not in allowed_folders:
             raise SanicException(
                 status_code=HTTPStatus.BAD_REQUEST,
                 message=f"Invalid folder. Allowed folders: {', '.join(allowed_folders)}",
             )
         
-        # Build file path
-        output_dir = Path(settings.OUTPUT_DIR)
-        file_path = output_dir / folder / filename
-        
-        # Security check: ensure the file is within the allowed directory
-        try:
-            file_path.resolve().relative_to(output_dir.resolve())
-        except ValueError:
-            raise SanicException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                message="Invalid file path",
-            )
-        
         # Check if file exists
-        if not file_path.exists():
+        if not full_path.exists():
             raise SanicException(
                 status_code=HTTPStatus.NOT_FOUND,
-                message=f"File not found: {filename} in folder {folder}",
+                message=f"File not found: {file_path}",
             )
         
         # Check if it's a file (not a directory)
-        if not file_path.is_file():
+        if not full_path.is_file():
             raise SanicException(
                 status_code=HTTPStatus.BAD_REQUEST,
-                message=f"Path is not a file: {filename}",
+                message=f"Path is not a file: {file_path}",
             )
         
         # Determine content type based on file extension
+        filename = path_parts[-1]
         content_type = "application/octet-stream"
         if filename.endswith(".cif"):
             content_type = "chemical/x-cif"
@@ -329,10 +334,14 @@ class DesignFileServeView(HTTPMethodView):
             content_type = "application/json"
         elif filename.endswith(".txt"):
             content_type = "text/plain"
+        elif filename.endswith(".csv"):
+            content_type = "text/csv"
+        elif filename.endswith(".pdf"):
+            content_type = "application/pdf"
         
         # Read and serve the file
         try:
-            with open(file_path, "rb") as f:
+            with open(full_path, "rb") as f:
                 file_content = f.read()
             
             # Escape filename for Content-Disposition header
@@ -583,8 +592,167 @@ class DesignListView(HTTPMethodView):
             )
 
 
+class DesignResultsView(HTTPMethodView):
+    @openapi.definition(
+        response={
+            200: dict[str, Any],
+            404: NotFoundResponse,
+            500: ErrorResponse,
+        },
+    )
+    async def get(self, request: Request, job_id: str) -> Any:
+        """
+        List available result files for a design job.
+        
+        Returns a JSON response with file paths that can be accessed via /v1/files/...
+        """
+        # Get database session from request context
+        db: AsyncSession = request.ctx.postgres_db
+        
+        try:
+            # Parse job ID
+            try:
+                job_uuid = uuid.UUID(job_id)
+            except ValueError:
+                raise SanicException(
+                    status_code=HTTPStatus.BAD_REQUEST,
+                    message=f"Invalid job ID format: {job_id}",
+                )
+            
+            # Query the design job
+            stmt = select(DesignJob).where(DesignJob.id == job_uuid)
+            result = await db.execute(stmt)
+            design_job = result.scalar_one_or_none()
+            
+            if not design_job:
+                raise SanicException(
+                    status_code=HTTPStatus.NOT_FOUND,
+                    message=f"Design job not found: {job_id}",
+                )
+            
+            # Build the job output directory path
+            output_dir = Path(settings.OUTPUT_DIR)
+            job_output_dir = output_dir / "boltzgen_outputs" / str(job_id)
+            
+            # Get the input YAML filename stem (without extension) for pattern matching
+            yaml_stem = Path(design_job.input_yaml_filename).stem
+            
+            # List of files to check for
+            files_to_check = []
+            
+            # Root level CIF file
+            root_cif = job_output_dir / f"{yaml_stem}.cif"
+            if root_cif.exists():
+                relative_path = root_cif.relative_to(output_dir)
+                files_to_check.append({
+                    "name": root_cif.name,
+                    "path": str(relative_path),
+                    "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                })
+            
+            # Final ranked designs files
+            final_ranked_dir = job_output_dir / "final_ranked_designs"
+            if final_ranked_dir.exists():
+                # all_designs_metrics.csv
+                all_metrics = final_ranked_dir / "all_designs_metrics.csv"
+                if all_metrics.exists():
+                    relative_path = all_metrics.relative_to(output_dir)
+                    files_to_check.append({
+                        "name": all_metrics.name,
+                        "path": str(relative_path),
+                        "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                    })
+                
+                # final_designs_metrics_2.csv
+                final_metrics = final_ranked_dir / f"final_designs_metrics_{design_job.budget}.csv"
+                if final_metrics.exists():
+                    relative_path = final_metrics.relative_to(output_dir)
+                    files_to_check.append({
+                        "name": final_metrics.name,
+                        "path": str(relative_path),
+                        "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                    })
+                
+                # results_overview.pdf
+                results_pdf = final_ranked_dir / "results_overview.pdf"
+                if results_pdf.exists():
+                    relative_path = results_pdf.relative_to(output_dir)
+                    files_to_check.append({
+                        "name": results_pdf.name,
+                        "path": str(relative_path),
+                        "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                    })
+                
+                # Final designs directory
+                final_designs_dir = final_ranked_dir / f"final_{design_job.budget}_designs"
+                if final_designs_dir.exists():
+                    # Check for rank files in final_designs directory (excluding before_refolding subdirectory)
+                    for rank_file in sorted(final_designs_dir.glob("rank*.cif")):
+                        if rank_file.is_file() and rank_file.parent == final_designs_dir:
+                            relative_path = rank_file.relative_to(output_dir)
+                            files_to_check.append({
+                                "name": rank_file.name,
+                                "path": str(relative_path),
+                                "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                            })
+                    
+                    # Check before_refolding subdirectory
+                    before_refolding_dir = final_designs_dir / "before_refolding"
+                    if before_refolding_dir.exists():
+                        for rank_file in sorted(before_refolding_dir.glob("rank*.cif")):
+                            if rank_file.is_file():
+                                relative_path = rank_file.relative_to(output_dir)
+                                files_to_check.append({
+                                    "name": rank_file.name,
+                                    "path": str(relative_path),
+                                    "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                                })
+            
+            # Intermediate designs inverse folded files
+            intermediate_dir = job_output_dir / "intermediate_designs_inverse_folded"
+            if intermediate_dir.exists():
+                # aggregate_metrics_analyze.csv
+                aggregate_metrics = intermediate_dir / "aggregate_metrics_analyze.csv"
+                if aggregate_metrics.exists():
+                    relative_path = aggregate_metrics.relative_to(output_dir)
+                    files_to_check.append({
+                        "name": aggregate_metrics.name,
+                        "path": str(relative_path),
+                        "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                    })
+                
+                # per_target_metrics_analyze.csv
+                per_target_metrics = intermediate_dir / "per_target_metrics_analyze.csv"
+                if per_target_metrics.exists():
+                    relative_path = per_target_metrics.relative_to(output_dir)
+                    files_to_check.append({
+                        "name": per_target_metrics.name,
+                        "path": str(relative_path),
+                        "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                    })
+            
+            return response.json(
+                {
+                    "message": "Design job results retrieved successfully",
+                    "job_id": str(job_id),
+                    "files": files_to_check,
+                    "count": len(files_to_check),
+                },
+                status=HTTPStatus.OK,
+            )
+            
+        except SanicException:
+            raise
+        except Exception as e:
+            raise SanicException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                message=f"Failed to retrieve design job results: {str(e)}",
+            )
+
+
 design_v1.add_route(DesignCheckView.as_view(), "/design/check")
 design_v1.add_route(DesignCreateView.as_view(), "/design/create")
 design_v1.add_route(DesignListView.as_view(), "/design/list")
+design_v1.add_route(DesignResultsView.as_view(), "/design/results/<job_id>")
 design_v1.add_route(DesignFileView.as_view(), "/upload")
-design_v1.add_route(DesignFileServeView.as_view(), "/files/<folder>/<filename>")
+design_v1.add_route(DesignFileServeView.as_view(), "/files/<file_path:path>")
