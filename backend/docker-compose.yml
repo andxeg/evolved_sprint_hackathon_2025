@@ -12,15 +12,14 @@ services:
       - evolved-hackathon-db-data:/var/lib/postgresql/data/pgdata
     environment:
       - PGDATA=/var/lib/postgresql/data/pgdata
-      - POSTGRES_PASSWORD=changethis
+      - POSTGRES_PASSWORD=donothackmeplease
       - POSTGRES_USER=postgres
       - POSTGRES_DB=evolved-hackathon
       - POSTGRES_HOST_AUTH_METHOD=trust
     ports:
       - "5432:5432"
     networks:
-      shared-network-evolved-hackathon:
-        aliases: [db] # <- other stacks can resolve "db"
+      - host-network
 
 
   redis:
@@ -29,17 +28,20 @@ services:
     ports:
       - "6379:6379"
     networks:
-      shared-network-evolved-hackathon:
-        aliases: [redis]
+      - host-network
 
   api:
     restart: always
+    entrypoint: ["/app/docker-entrypoint.sh"]
     command: sanic server:create_app --host 0.0.0.0 --port 8000
     depends_on:
       - db
       - redis
     build:
       context: ./
+      args:
+        USER_ID: ${UID:-1002}
+        GROUP_ID: ${GID:-1002}
     environment:
       - ENV_FOR_DYNACONF=docker
     extra_hosts:
@@ -47,13 +49,14 @@ services:
     ports:
       - "8000:8000"
     networks:
-      shared-network-evolved-hackathon:
-        aliases: [api]
+      - host-network
+    volumes:
+      - /home/nebius/julio/runs:/app/tmp/output/results:rw
 
-
+  
 volumes:
   evolved-hackathon-db-data:
 
 networks:
-  shared-network-evolved-hackathon:
-    external: true
+  host-network:
+    driver: bridge
