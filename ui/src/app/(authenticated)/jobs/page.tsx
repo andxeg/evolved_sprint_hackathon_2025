@@ -6,18 +6,12 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import timezone from 'dayjs/plugin/timezone'
 import utc from 'dayjs/plugin/utc'
-import { ArrowUpDown, ChevronDown, GitFork, Loader2 } from 'lucide-react'
+import { ArrowUpDown, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { useToast } from '@/hooks/use-toast'
 
 import WorkflowHistory from '../tasks/workflow-history'
@@ -27,6 +21,19 @@ dayjs.extend(utc)
 dayjs.extend(timezone)
 dayjs.tz.setDefault('UTC')
 
+type DesignJob = {
+  id: string
+  input_yaml_filename: string
+  budget: number
+  protocol_name: string
+  num_designs: number
+  status: string
+  created_at: string
+  updated_at: string
+  pipeline_name: string
+}
+
+// Type for table display (mapped from API response)
 type Pipeline = {
   pipeline_id: string
   name: string
@@ -34,6 +41,9 @@ type Pipeline = {
   updated_at: string
   created_at: string
   description?: string
+  protocol_name?: string
+  num_designs?: number
+  budget?: number
 }
 
 export default function PipelinesPage() {
@@ -42,171 +52,57 @@ export default function PipelinesPage() {
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [isLoading, setIsLoading] = useState(false)
-  const [websocketConnections, setWebsocketConnections] = useState<Map<string, WebSocket>>(new Map())
-  const isMountedRef = React.useRef(true)
   const router = useRouter()
-  const { toast: _toast } = useToast()
+  const { toast } = useToast()
 
-  // WebSocket connection management
-  const createWebSocketConnection = useCallback((pipelineId: string) => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL
-    if (!API_URL) return
-
-    // Check if connection already exists
-    if (websocketConnections.has(pipelineId)) {
-      return
-    }
-
-    let wsUrl = API_URL
-    // Convert HTTP/HTTPS to WS/WSS
-    if (API_URL.includes('http')) {
-      wsUrl = API_URL.replace('http', 'ws')
-    }
-    if (API_URL.includes('https')) {
-      wsUrl = API_URL.replace('https', 'wss')
-    }
-
-    const ws = new WebSocket(`${wsUrl}/v1/pipelines/status/live/pipeline-status/${pipelineId}`)
-    
-    // Add connection to map immediately to track it
-    setWebsocketConnections(prev => new Map(prev).set(pipelineId, ws))
-    
-    // Add connection timeout
-    const connectionTimeout = setTimeout(() => {
-      if (ws.readyState === WebSocket.CONNECTING) {
-        console.warn(`WebSocket connection timeout for pipeline ${pipelineId}, closing connection`)
-        ws.close()
-      }
-    }, 10000) // 10 second timeout
-    
-    ws.onopen = () => {
-      clearTimeout(connectionTimeout)
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        
-        // Handle different possible message structures
-        let newStatus = data.status || data.state || data
-        
-        // If the message is just a string (like "RUNNING", "PENDING", etc.)
-        if (typeof data === 'string') {
-          newStatus = data
-        }
-
-        // Update the pipeline status in the pipelines array
-        setPipelines(prevPipelines => {
-          const updatedPipelines = prevPipelines.map(pipeline => 
-            pipeline.pipeline_id === pipelineId 
-              ? { ...pipeline, status: newStatus, updated_at: new Date().toISOString() }
-              : pipeline
-          )
-          return updatedPipelines
-        })
-
-        // If status is COMPLETED, disconnect the WebSocket
-        if (newStatus === 'COMPLETED') {
-          try {
-            if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
-              ws.close(1000, 'Pipeline completed')
-            }
-          } catch (error) {
-            console.warn(`Error closing WebSocket for completed pipeline ${pipelineId}:`, error)
-          }
-          setWebsocketConnections(prev => {
-            const newMap = new Map(prev)
-            newMap.delete(pipelineId)
-            return newMap
-          })
-        }
-      } catch (error) {
-        console.error(`Error parsing WebSocket message for pipeline ${pipelineId}:`, error)
-      }
-    }
-
-    ws.onerror = (error) => {
-      if (process.env.NODE_ENV === 'production' || !String(error).includes('closed before the connection is established')) {
-        console.error(`WebSocket error for pipeline ${pipelineId}:`, error)
-      }
-      clearTimeout(connectionTimeout)
-    }
-
-    ws.onclose = () => {
-      clearTimeout(connectionTimeout)
-      setWebsocketConnections(prev => {
-        const newMap = new Map(prev)
-        newMap.delete(pipelineId)
-        return newMap
-      })
-    }
-  }, [websocketConnections])
-
-  const _disconnectWebSocket = useCallback((pipelineId: string) => {
-    setWebsocketConnections(prev => {
-      const ws = prev.get(pipelineId)
-      if (ws) {
-        try {
-          if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
-            ws.close(1000, 'Manual disconnect')
-          }
-        } catch (error) {
-          console.warn(`Error closing WebSocket for pipeline ${pipelineId}:`, error)
-        }
-        const newMap = new Map(prev)
-        newMap.delete(pipelineId)
-        return newMap
-      }
-      return prev
-    })
-  }, [])
-
-  // Mock data for pipelines - wrapped in useMemo to prevent re-creation
-  const mockPipelines = useMemo((): Pipeline[] => [
-  ], [])
 
   const fetchPipelineList = useCallback(async (skip: number = 0, limit: number = 5): Promise<{data: Pipeline[], total: number}> => {
-    // For now, return mock data instead of API call
-    const startIndex = skip
-    const endIndex = skip + limit
-    const paginatedPipelines = mockPipelines.slice(startIndex, endIndex)
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     
-    return {
-      data: paginatedPipelines.map((pipeline: Pipeline) => ({
-        ...pipeline,
-        created_at: new Date(pipeline.created_at).toLocaleString(),
-        updated_at: new Date(pipeline.updated_at).toISOString()
-      })),
-      total: mockPipelines.length
-    }
-
-    // Original API call (commented out for now)
-    /*
-    const API_URL = process.env.NEXT_PUBLIC_API_URL
-    const response = await fetch(
-      `${API_URL}/v1/pipelines?skip=${skip}&limit=${limit}`,
-      {
-        credentials: 'include'
+    try {
+      const response = await fetch(
+        `${API_URL}/v1/design/list?skip=${skip}&limit=${limit}`,
+        {
+          credentials: 'include'
+        }
+      )
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch design jobs')
       }
-    )
-    if (!response.ok) {
-      throw new Error('Failed to fetch pipelines')
+      
+      const data = await response.json()
+      
+      // The API returns {message, count, jobs}
+      const jobs: DesignJob[] = data.jobs || []
+      const total = data.count || 0
+      
+      // Map API response to table format
+      const pipelines: Pipeline[] = jobs.map((job: DesignJob) => ({
+        pipeline_id: job.id,
+        name: job.pipeline_name || job.input_yaml_filename,
+        status: job.status.toUpperCase(),
+        created_at: job.created_at,
+        updated_at: job.updated_at,
+        description: `${job.protocol_name} - ${job.num_designs} designs - Budget: ${job.budget}`,
+        protocol_name: job.protocol_name,
+        num_designs: job.num_designs,
+        budget: job.budget
+      }))
+      
+      return {
+        data: pipelines,
+        total: total
+      }
+    } catch (error) {
+      console.error('Error fetching design jobs:', error)
+      // Return empty data on error - toast will be shown in refreshPipelines
+      return {
+        data: [],
+        total: 0
+      }
     }
-    const data = await response.json()
-    
-    // The API returns {data: Array, count: number}
-    const pipelines = data.data || []
-    const total = data.count || 0
-    
-    return {
-      data: pipelines.map((pipeline: any) => ({
-        ...pipeline,
-        created_at: new Date(pipeline.created_at).toLocaleString()
-      })),
-      total: total
-    }
-    */
-  }, [mockPipelines])
+  }, [])
 
   const refreshPipelines = useCallback(async (page: number = 0, size: number = 5) => {
     setIsLoading(true)
@@ -217,51 +113,31 @@ export default function PipelinesPage() {
       setTotalPipelines(response.total)
       setCurrentPage(page)
       setPageSize(size)
-
-      // Set up WebSocket connections for non-completed pipelines
-      response.data.forEach((pipeline: Pipeline) => {
-        if (pipeline.status !== 'COMPLETED' && !websocketConnections.has(pipeline.pipeline_id)) {
-          createWebSocketConnection(pipeline.pipeline_id)
-        }
-      })
     } catch (error) {
       console.error('Error fetching pipelines:', error)
+      toast({
+        title: "Error",
+        description: `Failed to fetch design jobs: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
-  }, [createWebSocketConnection, websocketConnections, fetchPipelineList])
+  }, [fetchPipelineList, toast])
 
   useEffect(() => {
     refreshPipelines(0, 10) // Initial load with first page and 10 items per page
-  }, [refreshPipelines]) // Include refreshPipelines dependency
-
-  // Cleanup WebSocket connections on component unmount
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false
-      websocketConnections.forEach((ws, pipelineId) => {
-        try {
-          if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
-            ws.close(1000, 'Component unmounting')
-          }
-        } catch (error) {
-          if (process.env.NODE_ENV === 'production' || !String(error).includes('closed before the connection is established')) {
-            console.warn(`Error closing WebSocket for pipeline ${pipelineId}:`, error)
-          }
-        }
-      })
-    }
-  }, [websocketConnections]) // Include websocketConnections dependency
+  }, [refreshPipelines])
 
   const handleRowClick = (pipeline: Pipeline) => {
-    router.push(`/pipelines/new/${pipeline.pipeline_id}`)
+    router.push(`/jobs/${pipeline.pipeline_id}`)
   }
 
   const statusColors: { [key: string]: string } = {
-    running: 'bg-blue-800',
+    running: 'bg-blue-500',
     completed: 'bg-green-500',
     failed: 'bg-red-500',
-    pending: 'bg-yellow-500'
+    pending: 'bg-gray-500'
   }
 
   const toCamelCase = (str: string) => {
@@ -303,6 +179,42 @@ export default function PipelinesPage() {
               {camelCaseStatus}
             </Badge>
           </div>
+        )
+      }
+    },
+    {
+      accessorKey: 'protocol_name',
+      header: 'Protocol',
+      cell: ({ row }) => {
+        const protocol = row.getValue('protocol_name') as string
+        return (
+          <span className="text-sm">
+            {protocol || 'N/A'}
+          </span>
+        )
+      }
+    },
+    {
+      accessorKey: 'num_designs',
+      header: 'Number of Designs',
+      cell: ({ row }) => {
+        const numDesigns = row.getValue('num_designs') as number
+        return (
+          <span className="text-sm">
+            {numDesigns ?? 'N/A'}
+          </span>
+        )
+      }
+    },
+    {
+      accessorKey: 'budget',
+      header: 'Budget',
+      cell: ({ row }) => {
+        const budget = row.getValue('budget') as number
+        return (
+          <span className="text-sm">
+            {budget ?? 'N/A'}
+          </span>
         )
       }
     },

@@ -17,18 +17,10 @@ import {
   SortingState,
   Table as TableType,
   useReactTable} from '@tanstack/react-table'
-import { Eye, MoreHorizontal, RefreshCw } from 'lucide-react'
-import { usePathname,useRouter } from 'next/navigation'
+import { RefreshCw } from 'lucide-react'
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -85,8 +77,6 @@ export function WorkflowHistory<TData, TValue>({
       pageSize: pageSize
     })
   }, [currentPage, pageSize])
-  const router = useRouter()
-  const pathname = usePathname()
   const { toast } = useToast()
 
   // Get appropriate message based on current path
@@ -94,39 +84,8 @@ export function WorkflowHistory<TData, TValue>({
     return 'No results. Please start a new workflow.'
   }
   const enhancedColumns = React.useMemo(() => [
-    ...columns,
-    {
-      id: 'actions',
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="h-8 w-8 p-0"
-              onClick={e => e.stopPropagation()}
-            >
-              <span className="sr-only">Open menu</span>
-              <MoreHorizontal className="h-6 w-6" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={e => {
-                e.stopPropagation()
-                router.push(
-                  `/tasks/results/${(row.original as any).workflow_id}`
-                )
-              }}
-            >
-              <Eye className="mr-2 h-4 w-4" />
-              View Workflow
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )
-    }
-  ], [columns, router])
+    ...columns
+  ], [columns])
 
   const table = useReactTable({
     data,
@@ -249,7 +208,7 @@ export function WorkflowHistory<TData, TValue>({
                 {/* Show skeleton rows while loading */}
                 {Array.from({ length: 3 }).map((_, index) => (
                   <TableRow key={`skeleton-${index}`}>
-                    {Array.from({ length: columns.length + 1 }).map((_, cellIndex) => (
+                    {Array.from({ length: columns.length }).map((_, cellIndex) => (
                       <TableCell key={`skeleton-cell-${cellIndex}`} className="py-4">
                         <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
                       </TableCell>
@@ -280,7 +239,7 @@ export function WorkflowHistory<TData, TValue>({
             ) : (
               <TableRow>
                 <TableCell
-                  colSpan={columns.length + 1}
+                  colSpan={columns.length}
                   className="h-24 text-center"
                 >
                   {getEmptyStateMessage()}

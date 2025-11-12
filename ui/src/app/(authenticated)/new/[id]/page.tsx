@@ -86,6 +86,9 @@ export default function PipelineEditorPage() {
   const [showCifViewer, setShowCifViewer] = useState(false)
   const [cifViewerUrl, setCifViewerUrl] = useState<string | null>(null)
 
+  // Store validation payload for reuse in Start Workflow
+  const [validationPayload, setValidationPayload] = useState<any>(null)
+
   // React Flow state
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
@@ -429,55 +432,69 @@ export default function PipelineEditorPage() {
            targetFormData.masked_binder_seq.trim() !== ''
   }
 
-  const handleRun = async () => {
-    console.log('Running pipeline...')
+  // Build payload function (shared between validate and start)
+  const buildPayload = async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    
+    // Generate a unique ID for this workflow run
+    const workflowId = pipelineId || `workflow-${Date.now()}`
+    
+    // Step 1: Upload YAML content as a file
+    const yamlContent = vhhConfigYaml || entitiesToYaml(entities)
+    const yamlBlob = new Blob([yamlContent], { type: 'text/yaml' })
+    const yamlFile = new File([yamlBlob], `${workflowId}_input.yaml`, { type: 'text/yaml' })
+    
+    const yamlFormData = new FormData()
+    yamlFormData.append('file', yamlFile)
+    
+    const yamlUploadResponse = await fetch(`${apiUrl}/v1/upload`, {
+      method: 'POST',
+      body: yamlFormData,
+    })
+    
+    if (!yamlUploadResponse.ok) {
+      throw new Error(`YAML upload failed: ${yamlUploadResponse.statusText}`)
+    }
+    
+    const yamlUploadData = await yamlUploadResponse.json()
+    const inputYamlFilename = yamlUploadData.files?.[0]?.file_name || `${workflowId}_input.yaml`
+    
+    // Step 2: Build payload
+    const payload: any = {
+      inputYamlFilename: inputYamlFilename,
+      protocolName: protocol,
+      numDesigns: parseInt(numDesigns) || 10,
+      budget: parseInt(budget) || 2,
+      pipelineName: pipelineName || generatePipelineName(),
+    }
+
+    // Check if any file entity has an uploaded CIF file
+    const fileEntity = entities.find(e => e.type === 'file' && (e.uploadedFilename || e.path))
+    if (fileEntity?.uploadedFilename) {
+      payload.cifFileFilename = fileEntity.uploadedFilename
+    } else if (fileEntity?.path) {
+      // If file was uploaded but filename not saved, use the path
+      payload.cifFileFilename = fileEntity.path
+    }
+
+    return payload
+  }
+
+  const handleValidateDesign = async () => {
+    console.log('Validating design...')
     
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
       
-      // Generate a unique ID for this workflow run
-      const workflowId = pipelineId || `workflow-${Date.now()}`
+      // Build payload (upload YAML if needed)
+      const payload = await buildPayload()
       
-      // Step 1: Upload YAML content as a file
-      const yamlContent = vhhConfigYaml || entitiesToYaml(entities)
-      const yamlBlob = new Blob([yamlContent], { type: 'text/yaml' })
-      const yamlFile = new File([yamlBlob], `${workflowId}_input.yaml`, { type: 'text/yaml' })
+      // Store payload for reuse in Start Workflow
+      setValidationPayload(payload)
       
-      const yamlFormData = new FormData()
-      yamlFormData.append('file', yamlFile)
+      console.log('Validation payload:', payload)
       
-      const yamlUploadResponse = await fetch(`${apiUrl}/v1/upload`, {
-        method: 'POST',
-        body: yamlFormData,
-      })
-      
-      if (!yamlUploadResponse.ok) {
-        throw new Error(`YAML upload failed: ${yamlUploadResponse.statusText}`)
-      }
-      
-      const yamlUploadData = await yamlUploadResponse.json()
-      const inputYamlFilename = yamlUploadData.files?.[0]?.file_name || `${workflowId}_input.yaml`
-      
-      // Step 2: Build payload
-      const payload: any = {
-        inputYamlFilename: inputYamlFilename,
-        protocolName: protocol,
-        numDesigns: parseInt(numDesigns) || 10,
-        budget: parseInt(budget) || 2,
-      }
-
-      // Check if any file entity has an uploaded CIF file
-      const fileEntity = entities.find(e => e.type === 'file' && (e.uploadedFilename || e.path))
-      if (fileEntity?.uploadedFilename) {
-        payload.cifFileFilename = fileEntity.uploadedFilename
-      } else if (fileEntity?.path) {
-        // If file was uploaded but filename not saved, use the path
-        payload.cifFileFilename = fileEntity.path
-      }
-
-      console.log('Workflow payload:', payload)
-      
-      // Step 3: Post payload to /v1/design
+      // Post payload to /v1/design/check
       const designResponse = await fetch(`${apiUrl}/v1/design/check`, {
         method: 'POST',
         headers: {
@@ -488,15 +505,14 @@ export default function PipelineEditorPage() {
       
       if (!designResponse.ok) {
         const errorText = await designResponse.text()
-        throw new Error(`Design creation failed: ${designResponse.statusText} - ${errorText}`)
+        throw new Error(`Design validation failed: ${designResponse.statusText} - ${errorText}`)
       }
       
       const designData = await designResponse.json()
-      console.log('Design created:', designData)
+      console.log('Design validated:', designData)
       
       // Check if validation passed and extract CIF URL
       if (designData.check_passed && designData.cif_url) {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
         const fullCifUrl = `${apiUrl}${designData.cif_url}`
         const viewerUrl = `https://nano-protein-viewer-react.juliocesar.io/?from=remote_url&url=${encodeURIComponent(fullCifUrl)}`
         
@@ -512,6 +528,57 @@ export default function PipelineEditorPage() {
           description: "Design validation completed successfully!",
         })
       }
+    } catch (error) {
+      console.error('Error validating design:', error)
+      toast({
+        title: "Validation failed",
+        description: `Failed to validate design: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleStartWorkflow = async () => {
+    console.log('Starting workflow...')
+    
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      
+      // Use stored payload if available, otherwise build a new one
+      let payload = validationPayload
+      
+      if (!payload) {
+        // If no stored payload, build a new one (this shouldn't happen if validate was called first)
+        payload = await buildPayload()
+        setValidationPayload(payload)
+      }
+      
+      console.log('Start workflow payload:', payload)
+      
+      // Post payload to /v1/design/create
+      const designResponse = await fetch(`${apiUrl}/v1/design/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      
+      if (!designResponse.ok) {
+        const errorText = await designResponse.text()
+        throw new Error(`Workflow start failed: ${designResponse.statusText} - ${errorText}`)
+      }
+      
+      const designData = await designResponse.json()
+      console.log('Workflow started:', designData)
+      
+      toast({
+        title: "Workflow started",
+        description: "Workflow has been started successfully!",
+      })
+      
+      // Redirect to jobs page on success
+      router.push('/jobs')
     } catch (error) {
       console.error('Error starting workflow:', error)
       toast({
@@ -803,7 +870,7 @@ export default function PipelineEditorPage() {
       {/* Header */}
       <PipelineHeader
         pipelineTitle={pipeline.title}
-        onRun={handleRun}
+        onRun={handleStartWorkflow}
         isFormValid={isFormValid()}
         estimatedRuntime="15min"
         activeTab={activeTab}
@@ -869,7 +936,7 @@ export default function PipelineEditorPage() {
                     <DesignStepForm
                       entities={entities}
                       onEntitiesChange={handleEntitiesChange}
-                      onValidate={handleRun}
+                      onValidate={handleValidateDesign}
                       onLoadExample={handleLoadExampleDesign}
                     />
                   ) : (

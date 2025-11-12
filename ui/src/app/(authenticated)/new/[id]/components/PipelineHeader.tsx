@@ -59,8 +59,8 @@ export function PipelineHeader({
         
         {/* Start Workflow Button */}
         <Button  
-          onClick={() => {}} 
-          disabled={true}
+          onClick={onRun} 
+          disabled={!isFormValid}
           className="w-auto"
         >
           Start Workflow
