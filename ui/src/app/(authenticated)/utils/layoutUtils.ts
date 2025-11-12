@@ -10,8 +10,8 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'L
   const isHorizontal = direction === 'LR'
   dagreGraph.setGraph({ 
     rankdir: direction,
-    ranksep: isHorizontal ? 120 : 80, // Spacing between ranks (horizontal: vertical spacing, vertical: horizontal spacing)
-    nodesep: isHorizontal ? 100 : 60, // Spacing between nodes (horizontal: vertical spacing, vertical: horizontal spacing)
+    ranksep: isHorizontal ? 60 : 40, // Spacing between ranks (horizontal: vertical spacing, vertical: horizontal spacing) - reduced by half
+    nodesep: isHorizontal ? 50 : 30, // Spacing between nodes (horizontal: vertical spacing, vertical: horizontal spacing) - reduced by half
     edgesep: 25, // Edge separation
     marginx: 100, // Horizontal margin
     marginy: 50  // Vertical margin

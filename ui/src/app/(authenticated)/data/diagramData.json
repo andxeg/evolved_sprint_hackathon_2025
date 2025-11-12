@@ -99,5 +99,230 @@
         "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
       }
     ]
+  },
+  "binder-optimization": {
+    "nodes": [
+      {
+        "id": "1",
+        "type": "input",
+        "position": { "x": 200, "y": 50 },
+        "data": {
+          "label": "Design",
+          "type": "design",
+          "description": "Define entities (proteins, ligands, files) and constraints for the design specification"
+        }
+      },
+      {
+        "id": "2",
+        "type": "process",
+        "position": { "x": 400, "y": -50 },
+        "data": {
+          "label": "Boltzgen 1",
+          "type": "boltzgen",
+          "description": "Boltzgen optimization process 1"
+        }
+      },
+      {
+        "id": "3",
+        "type": "process",
+        "position": { "x": 400, "y": 150 },
+        "data": {
+          "label": "Boltzgen 2",
+          "type": "boltzgen",
+          "description": "Boltzgen optimization process 2"
+        }
+      },
+      {
+        "id": "3b",
+        "type": "process",
+        "position": { "x": 400, "y": 250 },
+        "data": {
+          "label": "Boltzgen 3",
+          "type": "boltzgen",
+          "description": "Boltzgen optimization process 3"
+        }
+      },
+      {
+        "id": "4",
+        "type": "process",
+        "position": { "x": 600, "y": 50 },
+        "data": {
+          "label": "Selectivity Scoring",
+          "type": "selectivity-scoring",
+          "description": "Score designs for selectivity across multiple targets"
+        }
+      },
+      {
+        "id": "5",
+        "type": "process",
+        "position": { "x": 800, "y": 50 },
+        "data": {
+          "label": "Pareto Optimization",
+          "type": "pareto-optimization",
+          "description": "Optimize designs using Pareto frontier analysis"
+        }
+      },
+      {
+        "id": "6",
+        "type": "process",
+        "position": { "x": 1000, "y": 50 },
+        "data": {
+          "label": "Output Generation",
+          "type": "output-generation",
+          "description": "Generate final output files and results"
+        }
+      }
+    ],
+    "edges": [
+      { 
+        "id": "e1-2", 
+        "source": "1", 
+        "target": "2", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e1-3", 
+        "source": "1", 
+        "target": "3", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e1-3b", 
+        "source": "1", 
+        "target": "3b", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e2-4", 
+        "source": "2", 
+        "target": "4", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e3-4", 
+        "source": "3", 
+        "target": "4", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e3b-4", 
+        "source": "3b", 
+        "target": "4", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e4-5", 
+        "source": "4", 
+        "target": "5", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e5-6", 
+        "source": "5", 
+        "target": "6", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      }
+    ]
+  },
+  "iterative-iptm": {
+    "nodes": [
+      {
+        "id": "1",
+        "type": "input",
+        "position": { "x": 200, "y": 50 },
+        "data": {
+          "label": "Design",
+          "type": "design",
+          "description": "Define entities (proteins, ligands, files) and constraints for the design specification"
+        }
+      },
+      {
+        "id": "2",
+        "type": "process",
+        "position": { "x": 400, "y": 50 },
+        "data": {
+          "label": "Boltzgen 1",
+          "type": "boltzgen",
+          "description": "Boltzgen optimization process 1"
+        }
+      },
+      {
+        "id": "4",
+        "type": "condition",
+        "position": { "x": 500, "y": 50 },
+        "data": {
+          "label": "iPTM Scoring",
+          "type": "iptm-scoring",
+          "description": "Inference-time post-translational modification scoring"
+        }
+      },
+      {
+        "id": "7",
+        "type": "while",
+        "position": { "x": 400, "y": 200 },
+        "data": {
+          "label": "Update Design",
+          "type": "update-design",
+          "description": "Update design based on results"
+        }
+      },
+      {
+        "id": "end",
+        "type": "end",
+        "position": { "x": 550, "y": 50 },
+        "data": {
+          "label": "End",
+          "type": "end",
+          "description": "Pipeline end point"
+        }
+      }
+    ],
+    "edges": [
+      { 
+        "id": "e1-2", 
+        "source": "1", 
+        "target": "2", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e2-4", 
+        "source": "2", 
+        "target": "4", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e4-end", 
+        "source": "4", 
+        "sourceHandle": "if",
+        "target": "end", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e4-7", 
+        "source": "4", 
+        "sourceHandle": "else",
+        "target": "7", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      },
+      { 
+        "id": "e7-1", 
+        "source": "7", 
+        "target": "1", 
+        "animated": true, 
+        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
+      }
+    ]
   }
 }

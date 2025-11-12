@@ -54,6 +54,7 @@ export default function PipelineEditorPage() {
   const [pipelineData, setPipelineData] = useState<any>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [showJobConfig, setShowJobConfig] = useState(true)
+  const [operatingMode, setOperatingMode] = useState<string>('standard')
   
   // Job configuration state
   const [pipelineName, setPipelineName] = useState('')
@@ -130,9 +131,9 @@ export default function PipelineEditorPage() {
     }
   }, [activeTab])
 
-  // Load pipeline data based on URL parameter
-  useEffect(() => {
-    const data = getPipelineData(pipelineId)
+  // Function to load and render pipeline nodes based on operating mode
+  const loadPipelineNodes = useCallback((mode: string) => {
+    const data = getPipelineData(pipelineId, mode)
     if (data) {
       setPipelineData(data)
       
@@ -159,37 +160,117 @@ export default function PipelineEditorPage() {
         }
       }
       
-      // Add start and end nodes to the beginning and end
-      const nodesWithStartEnd = [startNode, ...data.diagram.nodes, endNode]
+      // For iterative-iptm mode, don't add start/end nodes as they're already in the diagram
+      const isIterativeIptm = mode === 'iterative-iptm'
+      const nodesWithStartEnd = isIterativeIptm 
+        ? data.diagram.nodes 
+        : [startNode, ...data.diagram.nodes, endNode]
       
-      // Add edges from start to first node and from last node to end
+      // Add edges from start to first node and from last node to end (only for non-iterative modes)
       const firstNodeId = data.diagram.nodes[0]?.id
       const lastNodeId = data.diagram.nodes[data.diagram.nodes.length - 1]?.id
       
-      const edgesWithStartEnd = [
-        ...data.diagram.edges,
-        ...(firstNodeId ? [{ id: 'e-start-1', source: 'start', target: firstNodeId }] : []),
-        ...(lastNodeId ? [{ id: `e-${lastNodeId}-end`, source: lastNodeId, target: 'end' }] : [])
-      ]
+      const edgesWithStartEnd = isIterativeIptm
+        ? data.diagram.edges
+        : [
+            ...data.diagram.edges,
+            ...(firstNodeId ? [{ id: 'e-start-1', source: 'start', target: firstNodeId }] : []),
+            ...(lastNodeId ? [{ id: `e-${lastNodeId}-end`, source: lastNodeId, target: 'end' }] : [])
+          ]
       
       // Apply initial layout (horizontal by default)
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      let { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
         nodesWithStartEnd,
         edgesWithStartEnd
       )
+      
+      // For binder-optimization mode, manually align Boltzgen 1, 2, and 3 vertically
+      if (mode === 'binder-optimization') {
+        const boltzgen1 = layoutedNodes.find(node => node.id === '2')
+        const boltzgen2 = layoutedNodes.find(node => node.id === '3')
+        const boltzgen3 = layoutedNodes.find(node => node.id === '3b')
+        
+        if (boltzgen1 && boltzgen2 && boltzgen3) {
+          // Use the x position of one of them (they should be close)
+          const centerX = (boltzgen1.position.x + boltzgen2.position.x + boltzgen3.position.x) / 3
+          
+          // Position them vertically aligned with proper spacing
+          const nodeSpacing = 100 // Vertical spacing between nodes
+          const centerY = (boltzgen1.position.y + boltzgen2.position.y + boltzgen3.position.y) / 3
+          
+          boltzgen1.position = {
+            x: centerX,
+            y: centerY - nodeSpacing
+          }
+          
+          boltzgen2.position = {
+            x: centerX,
+            y: centerY
+          }
+          
+          boltzgen3.position = {
+            x: centerX,
+            y: centerY + nodeSpacing
+          }
+        }
+      }
+      
+      // For iterative-iptm mode, manually position all nodes with consistent spacing
+      if (mode === 'iterative-iptm') {
+        const design = layoutedNodes.find(node => node.id === '1')
+        const boltzgen1 = layoutedNodes.find(node => node.id === '2')
+        const iptmScoring = layoutedNodes.find(node => node.id === '4')
+        const updateDesign = layoutedNodes.find(node => node.id === '7')
+        const end = layoutedNodes.find(node => node.id === 'end')
+        
+        if (design && boltzgen1 && iptmScoring && updateDesign && end) {
+          // Use consistent horizontal spacing
+          const horizontalSpacing = 300 // Distance between nodes horizontally (increased for better spacing)
+          const verticalSpacing = 150 // Distance between nodes vertically (increased for better spacing)
+          
+          // Position nodes horizontally aligned
+          const baseY = 50
+          
+          // Design node
+          design.position = { x: 200, y: baseY }
+          
+          // Boltzgen 1
+          boltzgen1.position = { x: 200 + horizontalSpacing, y: baseY }
+          
+          // iPTM Scoring (condition)
+          iptmScoring.position = { x: 200 + horizontalSpacing * 2, y: baseY }
+          
+          // End node (if branch from iPTM)
+          end.position = { x: 200 + horizontalSpacing * 3, y: baseY }
+          
+          // Update Design (while node, below iPTM Scoring)
+          updateDesign.position = { x: 200 + horizontalSpacing * 2, y: baseY + verticalSpacing }
+        }
+      }
+      
       setNodes(layoutedNodes)
       setEdges(layoutedEdges)
       
-      // Auto-select the "[1] Design" node to open the form by default
-      const designNode = layoutedNodes.find(node => node.data?.type === 'design')
-      if (designNode) {
-        setSelectedNode(designNode)
-      }
+      // Don't auto-select any node on load
+      setSelectedNode(null)
     } else {
       // Redirect to pipelines page if pipeline not found
       router.push('/pipelines')
     }
   }, [pipelineId, router])
+
+  // Load pipeline data based on URL parameter and operating mode
+  useEffect(() => {
+    loadPipelineNodes(operatingMode)
+  }, [pipelineId, router, operatingMode, loadPipelineNodes])
+
+  // Handle operating mode change
+  const handleOperatingModeChange = (mode: string) => {
+    setOperatingMode(mode)
+    // Reset entities and form state when switching modes
+    setEntities([])
+    setSelectedNode(null)
+  }
 
   // Initialize pipeline name when component mounts
   useEffect(() => {
@@ -893,6 +974,8 @@ export default function PipelineEditorPage() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         isStartingWorkflow={isStartingWorkflow}
+        operatingMode={operatingMode}
+        onOperatingModeChange={handleOperatingModeChange}
       />
 
       {/* Full Screen Editor with Floating Form */}
@@ -966,6 +1049,12 @@ export default function PipelineEditorPage() {
                         {/* Show Label and Description for non-input nodes */}
                         {selectedNode.data?.label !== 'Input: Target Protein' && (
                       <>
+                        <div>
+                          <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400">Type</h4>
+                          <p className="text-xs text-gray-900 dark:text-gray-100 font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded capitalize">
+                            {String(selectedNode.type || 'N/A')}
+                          </p>
+                        </div>
                         <div>
                           <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400">Description</h4>
                           <p className="text-xs text-gray-900 dark:text-gray-100">{String(selectedNode.data?.description || 'N/A')}</p>

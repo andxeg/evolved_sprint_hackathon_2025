@@ -10,6 +10,8 @@ import {
   Microchip,
   Microscope,
   Play,
+  RefreshCcwDot,
+  Split,
   Square,
   Target,
   Zap} from 'lucide-react'
@@ -51,6 +53,10 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
       return <Play className="w-4 h-4" />
     } else if (nodeType === 'end') {
       return <Square className="w-4 h-4" />
+    } else if (nodeType === 'condition') {
+      return <Split className="w-4 h-4" />
+    } else if (nodeType === 'while') {
+      return <RefreshCcwDot className="w-4 h-4" />
     }
     return null
   }
@@ -66,6 +72,10 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
       return 'bg-emerald-500'
     } else if (nodeType === 'end') {
       return 'bg-red-500'
+    } else if (nodeType === 'condition') {
+      return 'bg-orange-500'
+    } else if (nodeType === 'while') {
+      return 'bg-orange-500'
     }
     return 'bg-gray-500'
   }
@@ -141,29 +151,82 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
         textAlign: 'center'
       }}
     >
-      {/* Source Handle - for outgoing connections */}
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="source"
-        className="w-3 h-3 shadow-md"
-        style={{ 
-          background: '#3b82f6',
-          border: '2px solid white',
-        }}
-      />
+      {/* Source Handle(s) - for outgoing connections */}
+      {type === 'condition' ? (
+        <>
+          {/* If branch - top right */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="if"
+            className="w-3 h-3 shadow-md"
+            style={{ 
+              background: '#3b82f6',
+              border: '2px solid white',
+              top: '20px',
+            }}
+          />
+          {/* Else branch - bottom right */}
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="else"
+            className="w-3 h-3 shadow-md"
+            style={{ 
+              background: '#3b82f6',
+              border: '2px solid white',
+              bottom: '20px',
+            }}
+          />
+        </>
+      ) : type === 'while' ? (
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="source"
+          className="w-3 h-3 shadow-md"
+          style={{ 
+            background: '#3b82f6',
+            border: '2px solid white',
+          }}
+        />
+      ) : (
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="source"
+          className="w-3 h-3 shadow-md"
+          style={{ 
+            background: '#3b82f6',
+            border: '2px solid white',
+          }}
+        />
+      )}
       
       {/* Target Handle - for incoming connections */}
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="target"
-        className="w-3 h-3 shadow-md"
-        style={{ 
-          background: '#10b981',
-          border: '2px solid white',
-        }}
-      />
+      {type === 'while' ? (
+        <Handle
+          type="target"
+          position={Position.Top}
+          id="target"
+          className="w-3 h-3 shadow-md"
+          style={{ 
+            background: '#10b981',
+            border: '2px solid white',
+          }}
+        />
+      ) : (
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="target"
+          className="w-3 h-3 shadow-md"
+          style={{ 
+            background: '#10b981',
+            border: '2px solid white',
+          }}
+        />
+      )}
       
       {/* Colored Icon Background */}
       <div className={`flex-shrink-0 w-8 h-8 rounded-lg ${nodeTypeColor} flex items-center justify-center mr-3`}>
@@ -191,4 +254,6 @@ export const nodeTypes: NodeTypes = {
   process: ModelNode,
   start: ModelNode,
   end: ModelNode,
+  condition: ModelNode,
+  while: ModelNode,
 }
