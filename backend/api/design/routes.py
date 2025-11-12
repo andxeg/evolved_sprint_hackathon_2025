@@ -1,6 +1,10 @@
 import argparse
+import asyncio
 import json
+import os
+import subprocess
 import sys
+import traceback
 import uuid
 from datetime import datetime
 from http import HTTPStatus
@@ -18,10 +22,15 @@ from sanic_ext.extensions.openapi import openapi
 
 from api.design.models import DesignJob, DesignJobStatus
 from api.design.serializers import DesignInput
-from boltzgen.cli.boltzgen import ARTIFACTS, check_design_spec, get_artifact_path
+from boltzgen.cli.boltzgen import ARTIFACTS, check_design_spec, get_artifact_path, run_command
 from boltzgen.data.mol import load_canonicals
 from core.config import settings
-from sqlalchemy import select
+
+# Import config_dir from boltzgen.cli.boltzgen
+# We need to compute it the same way as boltzgen does
+from boltzgen.cli import boltzgen as boltzgen_cli
+from core.postgres_db import async_session_maker
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import quote
 
@@ -343,6 +352,108 @@ class DesignFileServeView(HTTPMethodView):
             )
 
 
+async def run_boltzgen_pipeline(job_id: uuid.UUID, input_yaml_filename: str, protocol_name: str, num_designs: int, budget: int) -> None:
+    """
+    Run the boltzgen pipeline in the background and update job status.
+    """
+    # Create a new database session for this background task
+    async with async_session_maker() as db:
+        try:
+            # Update status to RUNNING
+            stmt = update(DesignJob).where(DesignJob.id == job_id).values(status=DesignJobStatus.RUNNING)
+            await db.execute(stmt)
+            await db.commit()
+            
+            # Build paths
+            output_dir = Path(settings.OUTPUT_DIR)
+            yaml_path = output_dir / "uploads" / input_yaml_filename
+            
+            # Validate YAML file exists
+            if not yaml_path.exists():
+                raise FileNotFoundError(f"Input YAML file not found: {yaml_path}")
+            
+            job_output_dir = output_dir / "boltzgen_outputs" / str(job_id)
+            job_output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Create argparse.Namespace with required arguments
+            args = argparse.Namespace()
+            args.design_spec = [yaml_path]  # List of Path objects
+            args.output = job_output_dir
+            args.protocol = protocol_name
+            args.num_designs = num_designs
+            args.budget = budget
+            args.moldir = ARTIFACTS["moldir"][0]
+            args.force_download = False
+            args.models_token = None
+            args.cache = None
+            args.config = None
+            args.devices = None
+            args.num_workers = 1
+            # Set config_dir to the default value (boltzgen/resources/config)
+            # Import it from the boltzgen module where it's defined
+            args.config_dir = boltzgen_cli.config_dir
+            args.use_kernels = "auto"
+            args.diffusion_batch_size = None
+            # Default design checkpoints (required, cannot be None)
+            args.design_checkpoints = [
+                ARTIFACTS["design-diverse"][0],
+                ARTIFACTS["design-adherence"][0],
+            ]
+            args.step_scale = None
+            args.noise_scale = None
+            args.skip_inverse_folding = False
+            args.inverse_fold_num_sequences = 1
+            args.inverse_fold_checkpoint = ARTIFACTS["inverse-fold"][0]
+            args.inverse_fold_avoid = None
+            args.only_inverse_fold = False
+            args.folding_checkpoint = ARTIFACTS["folding"][0]
+            args.affinity_checkpoint = ARTIFACTS["affinity"][0]
+            args.alpha = None
+            args.filter_biased = "true"  # Default is "true"
+            args.refolding_rmsd_threshold = None
+            args.metrics_override = None
+            args.additional_filters = None
+            args.size_buckets = None
+            args.steps = None
+            args.subprocess = True  # --no_subprocess uses dest="subprocess" with action="store_false"
+            args.reuse = False
+            
+            # Debug logging
+            print(f"Running boltzgen pipeline for job {job_id}")
+            print(f"YAML path: {yaml_path} (exists: {yaml_path.exists()})")
+            print(f"Output dir: {job_output_dir}")
+            print(f"Protocol: {protocol_name}, Designs: {num_designs}, Budget: {budget}")
+            
+            # Run the command directly (this is a blocking call, but we're in a background task)
+            # We'll run it in a thread pool to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, run_command, args)
+            
+            # If we get here, the command completed successfully
+            new_status = DesignJobStatus.COMPLETED
+            print(f"Boltzgen pipeline completed successfully for job {job_id}")
+            
+            # Update status in database
+            stmt = update(DesignJob).where(DesignJob.id == job_id).values(status=new_status)
+            await db.execute(stmt)
+            await db.commit()
+            
+        except Exception as e:
+            # Update status to FAILED on exception
+            try:
+                stmt = update(DesignJob).where(DesignJob.id == job_id).values(status=DesignJobStatus.FAILED)
+                await db.execute(stmt)
+                await db.commit()
+            except Exception as db_error:
+                await db.rollback()
+                print(f"Error updating job status in database: {str(db_error)}")
+            
+            # Log the full exception with traceback
+            error_trace = traceback.format_exc()
+            print(f"Error running boltzgen pipeline for job {job_id}: {str(e)}")
+            print(f"Traceback: {error_trace}")
+
+
 class DesignCreateView(HTTPMethodView):
     @openapi.definition(
         response={
@@ -376,6 +487,21 @@ class DesignCreateView(HTTPMethodView):
             # Add to session
             db.add(design_job)
             await db.flush()  # Flush to get the ID without committing
+            job_id = design_job.id
+            
+            # Commit the job creation
+            await db.commit()
+            
+            # Start the boltzgen pipeline in the background
+            asyncio.create_task(
+                run_boltzgen_pipeline(
+                    job_id=job_id,
+                    input_yaml_filename=body.inputYamlFilename,
+                    protocol_name=body.protocolName,
+                    num_designs=body.numDesigns,
+                    budget=body.budget,
+                )
+            )
             
             # Convert to dict for response
             job_dict = design_job.to_dict()
@@ -391,7 +517,7 @@ class DesignCreateView(HTTPMethodView):
             
             return response.json(
                 {
-                    "message": "Design job created successfully",
+                    "message": "Design job created successfully and pipeline started",
                     "job": job_dict,
                 },
                 status=HTTPStatus.CREATED,
