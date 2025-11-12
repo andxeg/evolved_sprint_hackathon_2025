@@ -2,6 +2,7 @@ import argparse
 import json
 import sys
 import uuid
+from datetime import datetime
 from http import HTTPStatus
 from io import StringIO
 from pathlib import Path
@@ -15,10 +16,13 @@ from sanic.views import HTTPMethodView
 from sanic_ext import validate
 from sanic_ext.extensions.openapi import openapi
 
+from api.design.models import DesignJob, DesignJobStatus
 from api.design.serializers import DesignInput
 from boltzgen.cli.boltzgen import ARTIFACTS, check_design_spec, get_artifact_path
 from boltzgen.data.mol import load_canonicals
 from core.config import settings
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import quote
 
 
@@ -339,6 +343,122 @@ class DesignFileServeView(HTTPMethodView):
             )
 
 
+class DesignCreateView(HTTPMethodView):
+    @openapi.definition(
+        response={
+            200: dict[str, Any],
+            400: ErrorResponse,
+            500: ErrorResponse,
+        },
+    )
+    @validate(json=DesignInput)
+    async def post(self, request: Request, body: DesignInput) -> Any:
+        """
+        Create a new design job in the database.
+        
+        Receives the same payload as the design check endpoint and creates a DesignJob
+        record with status PENDING.
+        """
+        # Get database session from request context
+        db: AsyncSession = request.ctx.postgres_db
+        
+        try:
+            # Create a new DesignJob
+            design_job = DesignJob(
+                input_yaml_filename=body.inputYamlFilename,
+                budget=body.budget,
+                protocol_name=body.protocolName,
+                num_designs=body.numDesigns,
+                status=DesignJobStatus.PENDING,
+                pipeline_name=body.pipelineName,
+            )
+            
+            # Add to session
+            db.add(design_job)
+            await db.flush()  # Flush to get the ID without committing
+            
+            # Convert to dict for response
+            job_dict = design_job.to_dict()
+            
+            # Convert non-JSON-serializable types to strings
+            for key, value in job_dict.items():
+                if isinstance(value, uuid.UUID):
+                    job_dict[key] = str(value)
+                elif isinstance(value, datetime):
+                    job_dict[key] = value.isoformat()
+                elif hasattr(value, "value"):  # Handle enums
+                    job_dict[key] = value.value
+            
+            return response.json(
+                {
+                    "message": "Design job created successfully",
+                    "job": job_dict,
+                },
+                status=HTTPStatus.CREATED,
+            )
+            
+        except Exception as e:
+            await db.rollback()
+            raise SanicException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                message=f"Failed to create design job: {str(e)}",
+            )
+
+
+class DesignListView(HTTPMethodView):
+    @openapi.definition(
+        response={
+            200: dict[str, Any],
+            500: ErrorResponse,
+        },
+    )
+    async def get(self, request: Request) -> Any:
+        """
+        List all design jobs in the database.
+        
+        Returns a list of all DesignJob records ordered by creation date (newest first).
+        """
+        # Get database session from request context
+        db: AsyncSession = request.ctx.postgres_db
+        
+        try:
+            # Query all design jobs, ordered by created_at descending
+            stmt = select(DesignJob).order_by(DesignJob.created_at.desc())
+            result = await db.execute(stmt)
+            design_jobs = result.scalars().all()
+            
+            # Convert to list of dicts with proper serialization
+            jobs_list = []
+            for job in design_jobs:
+                job_dict = job.to_dict()
+                # Convert non-JSON-serializable types to strings
+                for key, value in job_dict.items():
+                    if isinstance(value, uuid.UUID):
+                        job_dict[key] = str(value)
+                    elif isinstance(value, datetime):
+                        job_dict[key] = value.isoformat()
+                    elif hasattr(value, "value"):  # Handle enums
+                        job_dict[key] = value.value
+                jobs_list.append(job_dict)
+            
+            return response.json(
+                {
+                    "message": "Design jobs retrieved successfully",
+                    "count": len(jobs_list),
+                    "jobs": jobs_list,
+                },
+                status=HTTPStatus.OK,
+            )
+            
+        except Exception as e:
+            raise SanicException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                message=f"Failed to retrieve design jobs: {str(e)}",
+            )
+
+
 design_v1.add_route(DesignCheckView.as_view(), "/design/check")
+design_v1.add_route(DesignCreateView.as_view(), "/design/create")
+design_v1.add_route(DesignListView.as_view(), "/design/list")
 design_v1.add_route(DesignFileView.as_view(), "/upload")
 design_v1.add_route(DesignFileServeView.as_view(), "/files/<folder>/<filename>")

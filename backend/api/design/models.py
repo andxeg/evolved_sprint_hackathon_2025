@@ -1,23 +1,17 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
 from sqlalchemy import UUID, DateTime, Integer, String
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy.orm import Mapped, mapped_column
-
-import uuid
-from datetime import datetime
-from typing import Any
-
-from sqlalchemy import UUID, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-def get_utc_now() -> datetime.datetime:
-    return datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+
+def get_utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 
@@ -48,3 +42,4 @@ class DesignJob(Base):
     protocol_name: Mapped[str] = mapped_column(String(255), nullable=False)
     num_designs: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[DesignJobStatus] = mapped_column(SQLEnum(DesignJobStatus), default=DesignJobStatus.PENDING)
+    pipeline_name: Mapped[str] = mapped_column(String(255), nullable=True)

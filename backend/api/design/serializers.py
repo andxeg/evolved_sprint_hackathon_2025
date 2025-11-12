@@ -7,3 +7,4 @@ class DesignInput(msgspec.Struct):
     protocolName: str
     numDesigns: int
     budget: int
+    pipelineName: str | None = None
