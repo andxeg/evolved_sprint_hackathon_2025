@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Plus, Trash2, ChevronDown, ChevronUp, Upload, X, CheckCircle2 } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Upload, X, CheckCircle2, Loader2 } from 'lucide-react'
 import React, { useState, useRef } from 'react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -37,9 +37,11 @@ interface DesignStepFormProps {
   onEntitiesChange: (entities: Entity[]) => void
   onValidate?: () => void
   onLoadExample?: () => void
+  isLoadingExample?: boolean
+  isValidatingDesign?: boolean
 }
 
-export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadExample }: DesignStepFormProps) {
+export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadExample, isLoadingExample = false, isValidatingDesign = false }: DesignStepFormProps) {
   const { toast } = useToast()
   const [expandedEntity, setExpandedEntity] = useState<number | null>(null)
   const [selectedEntityType, setSelectedEntityType] = useState<'protein' | 'ligand' | 'file' | ''>('')
@@ -637,9 +639,17 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
               variant="outline"
               size="sm"
               onClick={onLoadExample}
+              disabled={isLoadingExample}
               className="h-8 text-xs"
             >
-              Load Example
+              {isLoadingExample ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                'Load Example'
+              )}
             </Button>
           )}
           <Select 
@@ -750,10 +760,20 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
                     onValidate()
                   }
                 }}
+                disabled={isValidatingDesign}
                 className="w-full h-8 text-xs"
               >
-                <CheckCircle2 className="h-3 w-3 mr-2" />
-                Validate Design
+                {isValidatingDesign ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                    Validating...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3 w-3 mr-2" />
+                    Validate Design
+                  </>
+                )}
               </Button>
               <p className="text-xs text-muted-foreground mt-2 text-center">
                 Validates the design and syncs with YAML editor

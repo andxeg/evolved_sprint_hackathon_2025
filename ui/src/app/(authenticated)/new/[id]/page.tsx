@@ -18,7 +18,8 @@ import {
 import { 
   ChevronDown,
   Settings2,
-  X} from 'lucide-react'
+  X,
+  Loader2} from 'lucide-react'
 import { useParams,useRouter } from 'next/navigation'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -81,6 +82,9 @@ export default function PipelineEditorPage() {
   const [yamlValidationResult, setYamlValidationResult] = useState<any>(null)
   const [yamlSaveMessage, setYamlSaveMessage] = useState<string | null>(null)
   const [yamlIsResetting, setYamlIsResetting] = useState(false)
+  const [isLoadingExample, setIsLoadingExample] = useState(false)
+  const [isValidatingDesign, setIsValidatingDesign] = useState(false)
+  const [isStartingWorkflow, setIsStartingWorkflow] = useState(false)
 
   // CIF viewer modal state
   const [showCifViewer, setShowCifViewer] = useState(false)
@@ -330,7 +334,10 @@ export default function PipelineEditorPage() {
     // Here you would typically send the data to your API
   }
 
-  const handleLoadExample = () => {
+  const handleLoadExample = async () => {
+    setIsLoadingExample(true)
+    // Add a small delay to show loading state even for synchronous operation
+    await new Promise(resolve => setTimeout(resolve, 300))
     setTargetFormData({
       target_id: 'Q9NZQ7',
       target_name: 'PDL1',
@@ -338,9 +345,11 @@ export default function PipelineEditorPage() {
       target_hotspot_residues: 'A54,A56,A66,A115',
       masked_binder_seq: 'EVQLVESGGGLVQPGGSLRLSCAASG*********WFRQAPGKEREF***********NADSVKGRFTISRDNAKNTLYLQMNSLRAEDTAVYYC************WGQGTLVTVSS'
     })
+    setIsLoadingExample(false)
   }
 
   const handleLoadExampleDesign = async () => {
+    setIsLoadingExample(true)
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
       
@@ -405,6 +414,8 @@ export default function PipelineEditorPage() {
         description: `Failed to load example: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       })
+    } finally {
+      setIsLoadingExample(false)
     }
   }
 
@@ -482,6 +493,7 @@ export default function PipelineEditorPage() {
 
   const handleValidateDesign = async () => {
     console.log('Validating design...')
+    setIsValidatingDesign(true)
     
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -535,11 +547,14 @@ export default function PipelineEditorPage() {
         description: `Failed to validate design: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       })
+    } finally {
+      setIsValidatingDesign(false)
     }
   }
 
   const handleStartWorkflow = async () => {
     console.log('Starting workflow...')
+    setIsStartingWorkflow(true)
     
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
@@ -586,6 +601,8 @@ export default function PipelineEditorPage() {
         description: `Failed to start workflow: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       })
+    } finally {
+      setIsStartingWorkflow(false)
     }
   }
 
@@ -875,6 +892,7 @@ export default function PipelineEditorPage() {
         estimatedRuntime="15min"
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        isStartingWorkflow={isStartingWorkflow}
       />
 
       {/* Full Screen Editor with Floating Form */}
@@ -938,6 +956,8 @@ export default function PipelineEditorPage() {
                       onEntitiesChange={handleEntitiesChange}
                       onValidate={handleValidateDesign}
                       onLoadExample={handleLoadExampleDesign}
+                      isLoadingExample={isLoadingExample}
+                      isValidatingDesign={isValidatingDesign}
                     />
                   ) : (
                     <>
@@ -1115,9 +1135,17 @@ export default function PipelineEditorPage() {
                               variant="outline" 
                               size="sm"
                               onClick={handleLoadExample}
+                              disabled={isLoadingExample}
                               className="h-7 px-3 text-xs"
                             >
-                              Load Example
+                              {isLoadingExample ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                  Loading...
+                                </>
+                              ) : (
+                                'Load Example'
+                              )}
                             </Button>
                           </div>
                         </form>

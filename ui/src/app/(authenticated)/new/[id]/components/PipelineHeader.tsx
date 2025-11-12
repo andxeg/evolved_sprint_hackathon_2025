@@ -1,6 +1,6 @@
 'use client'
 
-import { Eye, SendHorizontalIcon, Settings } from 'lucide-react'
+import { Eye, SendHorizontalIcon, Settings, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import React from 'react'
 
@@ -22,6 +22,7 @@ interface PipelineHeaderProps {
   estimatedRuntime: string
   activeTab: string
   onTabChange: (tab: string) => void
+  isStartingWorkflow?: boolean
 }
 
 export function PipelineHeader({ 
@@ -30,7 +31,8 @@ export function PipelineHeader({
   isFormValid,
   estimatedRuntime,
   activeTab,
-  onTabChange
+  onTabChange,
+  isStartingWorkflow = false
 }: PipelineHeaderProps) {
   const router = useRouter()
 
@@ -60,11 +62,20 @@ export function PipelineHeader({
         {/* Start Workflow Button */}
         <Button  
           onClick={onRun} 
-          disabled={!isFormValid}
+          disabled={!isFormValid || isStartingWorkflow}
           className="w-auto"
         >
-          Start Workflow
-          <SendHorizontalIcon className="ml-2 h-4 w-4" />
+          {isStartingWorkflow ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Starting...
+            </>
+          ) : (
+            <>
+              Start Workflow
+              <SendHorizontalIcon className="ml-2 h-4 w-4" />
+            </>
+          )}
         </Button>
       </div>
     </div>
