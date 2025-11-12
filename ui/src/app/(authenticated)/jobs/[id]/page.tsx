@@ -37,6 +37,19 @@ const PdfViewer = dynamic(
   }
 )
 
+// Dynamically import YAML viewer with SSR disabled
+const YamlViewer = dynamic(
+  () => import('./components/YamlViewer'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+)
+
 type DesignResultFile = {
   name: string
   path: string
@@ -63,6 +76,9 @@ export default function JobResultsPage() {
   const [csvData, setCsvData] = useState<any[]>([])
   const [csvColumns, setCsvColumns] = useState<ColumnDef<any>[]>([])
   const [isLoadingCsv, setIsLoadingCsv] = useState(false)
+  const [yamlContent, setYamlContent] = useState<string | null>(null)
+  const [isLoadingYaml, setIsLoadingYaml] = useState(false)
+  const [yamlError, setYamlError] = useState<string | null>(null)
 
   const fetchJobResults = useCallback(async () => {
     if (!jobId) return
@@ -100,11 +116,12 @@ export default function JobResultsPage() {
     return filename.split('.').pop()?.toLowerCase() || ''
   }
 
-  const getFileType = (filename: string): 'cif' | 'pdf' | 'csv' | 'other' => {
+  const getFileType = (filename: string): 'cif' | 'pdf' | 'csv' | 'yaml' | 'other' => {
     const ext = getFileExtension(filename)
     if (ext === 'cif') return 'cif'
     if (ext === 'pdf') return 'pdf'
     if (ext === 'csv') return 'csv'
+    if (ext === 'yaml' || ext === 'yml') return 'yaml'
     return 'other'
   }
 
@@ -193,6 +210,35 @@ export default function JobResultsPage() {
     }
   }
 
+  const fetchYamlData = async (fileUrl: string) => {
+    setIsLoadingYaml(true)
+    setYamlError(null)
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}${fileUrl}`, {
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch YAML file: ${response.statusText}`)
+      }
+
+      const yamlText = await response.text()
+      setYamlContent(yamlText)
+    } catch (error) {
+      console.error('Error fetching YAML:', error)
+      setYamlError(`Failed to load YAML file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setYamlContent(null)
+      toast({
+        title: 'Error',
+        description: `Failed to load YAML file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoadingYaml(false)
+    }
+  }
+
   const handleFileClick = async (file: DesignResultFile) => {
     setSelectedFile(file)
     setShowFileViewer(true)
@@ -200,10 +246,16 @@ export default function JobResultsPage() {
     // Reset states
     setCsvData([])
     setCsvColumns([])
+    setYamlContent(null)
+    setYamlError(null)
     
-    // If it's a CSV file, fetch and parse it
-    if (getFileType(file.name) === 'csv') {
+    const fileType = getFileType(file.name)
+    
+    // Fetch file content based on type
+    if (fileType === 'csv') {
       await fetchCsvData(file.url)
+    } else if (fileType === 'yaml') {
+      await fetchYamlData(file.url)
     }
   }
 
@@ -385,6 +437,14 @@ export default function JobResultsPage() {
                 )}
                 {getFileType(selectedFile.name) === 'pdf' && (
                   <PdfViewer fileUrl={getPdfUrl(selectedFile.url)} />
+                )}
+                {getFileType(selectedFile.name) === 'yaml' && (
+                  <YamlViewer
+                    fileUrl={selectedFile.url}
+                    content={yamlContent}
+                    isLoading={isLoadingYaml}
+                    error={yamlError}
+                  />
                 )}
                 {getFileType(selectedFile.name) === 'other' && (
                   <div className="w-full h-full flex items-center justify-center border rounded-lg bg-muted/50">
