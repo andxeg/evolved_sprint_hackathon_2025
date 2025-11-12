@@ -2,7 +2,6 @@
 
 import { Editor } from '@monaco-editor/react'
 import { configureMonacoYaml } from 'monaco-yaml'
-import { useTheme } from 'next-themes'
 import React, { useEffect,useRef } from 'react'
 
 import vhhConfigSchema from '../schemas/vhh-config-schema.json'
@@ -25,7 +24,6 @@ export function YamlEditor({
   isLoading = false,
   error = null
 }: YamlEditorProps) {
-  const { theme } = useTheme()
   const editorRef = useRef<any>(null)
 
   useEffect(() => {
@@ -110,7 +108,7 @@ export function YamlEditor({
         value={value}
         onChange={handleEditorChange}
         onMount={handleEditorDidMount}
-        theme={theme === 'dark' ? 'vs-dark' : 'light'}
+        theme="vs-dark"
         options={{
           selectOnLineNumbers: true,
           roundedSelection: false,

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Plus, Trash2, ChevronDown, ChevronUp, Upload, X, CheckCircle2 } from 'lucide-react'
 import React, { useState, useRef } from 'react'
+import { useToast } from '@/hooks/use-toast'
 
 export interface Entity {
   type: 'protein' | 'ligand' | 'file'
@@ -35,9 +36,11 @@ interface DesignStepFormProps {
   entities: Entity[]
   onEntitiesChange: (entities: Entity[]) => void
   onValidate?: () => void
+  onLoadExample?: () => void
 }
 
-export function DesignStepForm({ entities, onEntitiesChange, onValidate }: DesignStepFormProps) {
+export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadExample }: DesignStepFormProps) {
+  const { toast } = useToast()
   const [expandedEntity, setExpandedEntity] = useState<number | null>(null)
   const [selectedEntityType, setSelectedEntityType] = useState<'protein' | 'ligand' | 'file' | ''>('')
   // Store refs for file inputs by entity index
@@ -265,7 +268,11 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate }: Desig
       if (!file) return
       
       if (!file.name.endsWith('.cif')) {
-        alert('Please upload a .cif file')
+        toast({
+          title: "Invalid file type",
+          description: "Please upload a .cif file",
+          variant: "destructive",
+        })
         if (fileInputRef.current) {
           fileInputRef.current.value = ''
         }
@@ -299,7 +306,11 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate }: Desig
         }
       } catch (error) {
         console.error('File upload error:', error)
-        alert(`Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        toast({
+          title: "Upload failed",
+          description: `Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          variant: "destructive",
+        })
         // Clear the file on error
         updateEntity(index, { uploadedFile: undefined, path: undefined, uploadedFilename: undefined })
       }
@@ -319,14 +330,22 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate }: Desig
     const addChain = () => {
       const chainId = formState.chainId.toUpperCase().trim()
       if (!chainId || chainId.length !== 1) {
-        alert('Please enter a single letter for Chain ID')
+        toast({
+          title: "Invalid chain ID",
+          description: "Please enter a single letter for Chain ID",
+          variant: "destructive",
+        })
         return
       }
 
       if (formState.type === 'include') {
         // Check if chain already exists
         if (includeChains.find(c => c.id === chainId)) {
-          alert(`Chain ${chainId} already exists in Include Chains`)
+          toast({
+            title: "Chain already exists",
+            description: `Chain ${chainId} already exists in Include Chains`,
+            variant: "destructive",
+          })
           return
         }
         const newChains = [...includeChains, { id: chainId }]
@@ -340,11 +359,19 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate }: Desig
       } else {
         // Check if chain already exists
         if (bindingTypeChains.find(c => c.id === chainId)) {
-          alert(`Chain ${chainId} already exists in Binding Types`)
+          toast({
+            title: "Chain already exists",
+            description: `Chain ${chainId} already exists in Binding Types`,
+            variant: "destructive",
+          })
           return
         }
         if (!formState.bindingResidues.trim()) {
-          alert('Please enter binding residues for binding_types')
+          toast({
+            title: "Missing binding residues",
+            description: "Please enter binding residues for binding_types",
+            variant: "destructive",
+          })
           return
         }
         const newChains = [...bindingTypeChains, { id: chainId, binding: formState.bindingResidues.trim() }]
@@ -604,6 +631,17 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate }: Desig
           </p>
         </div>
         <div className="flex gap-2">
+          {onLoadExample && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onLoadExample}
+              className="h-8 text-xs"
+            >
+              Load Example
+            </Button>
+          )}
           <Select 
             value={selectedEntityType} 
             onValueChange={(v) => setSelectedEntityType(v as 'protein' | 'ligand' | 'file')}

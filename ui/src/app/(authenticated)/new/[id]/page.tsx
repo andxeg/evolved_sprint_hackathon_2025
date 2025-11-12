@@ -20,14 +20,15 @@ import {
   Settings2,
   X} from 'lucide-react'
 import { useParams,useRouter } from 'next/navigation'
-import { useTheme } from 'next-themes'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useToast } from '@/hooks/use-toast'
 
 // Import extracted components and utilities
 import { getLayoutedElements } from '../../utils/layoutUtils'
@@ -46,7 +47,7 @@ import { validateAndCleanYamlContent,validateYamlContent } from './utils/yaml-va
 export default function PipelineEditorPage() {
   const router = useRouter()
   const params = useParams()
-  const { theme } = useTheme()
+  const { toast } = useToast()
   const pipelineId = params.id as string
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [pipelineData, setPipelineData] = useState<any>(null)
@@ -81,12 +82,19 @@ export default function PipelineEditorPage() {
   const [yamlSaveMessage, setYamlSaveMessage] = useState<string | null>(null)
   const [yamlIsResetting, setYamlIsResetting] = useState(false)
 
+  // CIF viewer modal state
+  const [showCifViewer, setShowCifViewer] = useState(false)
+  const [cifViewerUrl, setCifViewerUrl] = useState<string | null>(null)
+
+  // Store validation payload for reuse in Start Workflow
+  const [validationPayload, setValidationPayload] = useState<any>(null)
+
   // React Flow state
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
 
-  // Convert theme to React Flow colorMode
-  const colorMode: ColorMode = theme === 'dark' ? 'dark' : 'light'
+  // React Flow colorMode - always dark
+  const colorMode: ColorMode = 'dark'
 
   // Function to generate auto pipeline name
   const generatePipelineName = useCallback(() => {
@@ -332,6 +340,74 @@ export default function PipelineEditorPage() {
     })
   }
 
+  const handleLoadExampleDesign = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      
+      // Step 1: Fetch the CIF file from public folder
+      const cifResponse = await fetch('/examples/5cqg.cif')
+      if (!cifResponse.ok) {
+        throw new Error('Failed to fetch example CIF file')
+      }
+      
+      const cifBlob = await cifResponse.blob()
+      const cifFile = new File([cifBlob], '5cqg.cif', { type: 'chemical/x-cif' })
+      
+      // Step 2: Upload CIF file to API
+      const formData = new FormData()
+      formData.append('file', cifFile)
+      
+      const uploadResponse = await fetch(`${apiUrl}/v1/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      
+      if (!uploadResponse.ok) {
+        throw new Error(`CIF upload failed: ${uploadResponse.statusText}`)
+      }
+      
+      const uploadData = await uploadResponse.json()
+      const uploadedFilename = uploadData.files?.[0]?.file_name || '5cqg.cif'
+      
+      // Step 3: Create entities based on example YAML structure
+      const exampleEntities: Entity[] = [
+        {
+          type: 'protein',
+          id: 'G',
+          sequence: '12..20'
+        },
+        {
+          type: 'file',
+          path: uploadedFilename,
+          uploadedFilename: uploadedFilename,
+          uploadedFile: cifFile,
+          include: [
+            { id: 'A' }
+          ],
+          binding_types_chain: [
+            { id: 'A', binding: '343,344,251' }
+          ],
+          structure_groups: 'all'
+        }
+      ]
+      
+      // Step 4: Update entities and YAML
+      handleEntitiesChange(exampleEntities)
+      
+      toast({
+        title: "Example loaded",
+        description: "Example design loaded successfully!",
+      })
+    } catch (error) {
+      console.error('Error loading example design:', error)
+      toast({
+        title: "Error",
+        description: `Failed to load example: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    }
+  }
+
   // Form validation function
   const isFormValid = () => {
     // Check if entities are defined (for design pipeline)
@@ -356,55 +432,69 @@ export default function PipelineEditorPage() {
            targetFormData.masked_binder_seq.trim() !== ''
   }
 
-  const handleRun = async () => {
-    console.log('Running pipeline...')
+  // Build payload function (shared between validate and start)
+  const buildPayload = async () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    
+    // Generate a unique ID for this workflow run
+    const workflowId = pipelineId || `workflow-${Date.now()}`
+    
+    // Step 1: Upload YAML content as a file
+    const yamlContent = vhhConfigYaml || entitiesToYaml(entities)
+    const yamlBlob = new Blob([yamlContent], { type: 'text/yaml' })
+    const yamlFile = new File([yamlBlob], `${workflowId}_input.yaml`, { type: 'text/yaml' })
+    
+    const yamlFormData = new FormData()
+    yamlFormData.append('file', yamlFile)
+    
+    const yamlUploadResponse = await fetch(`${apiUrl}/v1/upload`, {
+      method: 'POST',
+      body: yamlFormData,
+    })
+    
+    if (!yamlUploadResponse.ok) {
+      throw new Error(`YAML upload failed: ${yamlUploadResponse.statusText}`)
+    }
+    
+    const yamlUploadData = await yamlUploadResponse.json()
+    const inputYamlFilename = yamlUploadData.files?.[0]?.file_name || `${workflowId}_input.yaml`
+    
+    // Step 2: Build payload
+    const payload: any = {
+      inputYamlFilename: inputYamlFilename,
+      protocolName: protocol,
+      numDesigns: parseInt(numDesigns) || 10,
+      budget: parseInt(budget) || 2,
+      pipelineName: pipelineName || generatePipelineName(),
+    }
+
+    // Check if any file entity has an uploaded CIF file
+    const fileEntity = entities.find(e => e.type === 'file' && (e.uploadedFilename || e.path))
+    if (fileEntity?.uploadedFilename) {
+      payload.cifFileFilename = fileEntity.uploadedFilename
+    } else if (fileEntity?.path) {
+      // If file was uploaded but filename not saved, use the path
+      payload.cifFileFilename = fileEntity.path
+    }
+
+    return payload
+  }
+
+  const handleValidateDesign = async () => {
+    console.log('Validating design...')
     
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
       
-      // Generate a unique ID for this workflow run
-      const workflowId = pipelineId || `workflow-${Date.now()}`
+      // Build payload (upload YAML if needed)
+      const payload = await buildPayload()
       
-      // Step 1: Upload YAML content as a file
-      const yamlContent = vhhConfigYaml || entitiesToYaml(entities)
-      const yamlBlob = new Blob([yamlContent], { type: 'text/yaml' })
-      const yamlFile = new File([yamlBlob], `${workflowId}_input.yaml`, { type: 'text/yaml' })
+      // Store payload for reuse in Start Workflow
+      setValidationPayload(payload)
       
-      const yamlFormData = new FormData()
-      yamlFormData.append('file', yamlFile)
+      console.log('Validation payload:', payload)
       
-      const yamlUploadResponse = await fetch(`${apiUrl}/v1/upload`, {
-        method: 'POST',
-        body: yamlFormData,
-      })
-      
-      if (!yamlUploadResponse.ok) {
-        throw new Error(`YAML upload failed: ${yamlUploadResponse.statusText}`)
-      }
-      
-      const yamlUploadData = await yamlUploadResponse.json()
-      const inputYamlFilename = yamlUploadData.files?.[0]?.file_name || `${workflowId}_input.yaml`
-      
-      // Step 2: Build payload
-      const payload: any = {
-        inputYamlFilename: inputYamlFilename,
-        protocolName: protocol,
-        numDesigns: parseInt(numDesigns) || 10,
-        budget: parseInt(budget) || 2,
-      }
-
-      // Check if any file entity has an uploaded CIF file
-      const fileEntity = entities.find(e => e.type === 'file' && (e.uploadedFilename || e.path))
-      if (fileEntity?.uploadedFilename) {
-        payload.cifFileFilename = fileEntity.uploadedFilename
-      } else if (fileEntity?.path) {
-        // If file was uploaded but filename not saved, use the path
-        payload.cifFileFilename = fileEntity.path
-      }
-
-      console.log('Workflow payload:', payload)
-      
-      // Step 3: Post payload to /v1/design
+      // Post payload to /v1/design/check
       const designResponse = await fetch(`${apiUrl}/v1/design/check`, {
         method: 'POST',
         headers: {
@@ -415,17 +505,87 @@ export default function PipelineEditorPage() {
       
       if (!designResponse.ok) {
         const errorText = await designResponse.text()
-        throw new Error(`Design creation failed: ${designResponse.statusText} - ${errorText}`)
+        throw new Error(`Design validation failed: ${designResponse.statusText} - ${errorText}`)
       }
       
       const designData = await designResponse.json()
-      console.log('Design created:', designData)
+      console.log('Design validated:', designData)
       
-      // TODO: Handle success (e.g., redirect, show success message)
-      alert('Workflow started successfully!')
+      // Check if validation passed and extract CIF URL
+      if (designData.check_passed && designData.cif_url) {
+        const fullCifUrl = `${apiUrl}${designData.cif_url}`
+        const viewerUrl = `https://nano-protein-viewer-react.juliocesar.io/?from=remote_url&url=${encodeURIComponent(fullCifUrl)}`
+        
+        setCifViewerUrl(viewerUrl)
+        setShowCifViewer(true)
+        toast({
+          title: "Validation successful",
+          description: "Design validation completed successfully!",
+        })
+      } else {
+        toast({
+          title: "Validation successful",
+          description: "Design validation completed successfully!",
+        })
+      }
+    } catch (error) {
+      console.error('Error validating design:', error)
+      toast({
+        title: "Validation failed",
+        description: `Failed to validate design: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleStartWorkflow = async () => {
+    console.log('Starting workflow...')
+    
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      
+      // Use stored payload if available, otherwise build a new one
+      let payload = validationPayload
+      
+      if (!payload) {
+        // If no stored payload, build a new one (this shouldn't happen if validate was called first)
+        payload = await buildPayload()
+        setValidationPayload(payload)
+      }
+      
+      console.log('Start workflow payload:', payload)
+      
+      // Post payload to /v1/design/create
+      const designResponse = await fetch(`${apiUrl}/v1/design/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      
+      if (!designResponse.ok) {
+        const errorText = await designResponse.text()
+        throw new Error(`Workflow start failed: ${designResponse.statusText} - ${errorText}`)
+      }
+      
+      const designData = await designResponse.json()
+      console.log('Workflow started:', designData)
+      
+      toast({
+        title: "Workflow started",
+        description: "Workflow has been started successfully!",
+      })
+      
+      // Redirect to jobs page on success
+      router.push('/jobs')
     } catch (error) {
       console.error('Error starting workflow:', error)
-      alert(`Failed to start workflow: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast({
+        title: "Error",
+        description: `Failed to start workflow: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
     }
   }
 
@@ -710,7 +870,7 @@ export default function PipelineEditorPage() {
       {/* Header */}
       <PipelineHeader
         pipelineTitle={pipeline.title}
-        onRun={handleRun}
+        onRun={handleStartWorkflow}
         isFormValid={isFormValid()}
         estimatedRuntime="15min"
         activeTab={activeTab}
@@ -776,26 +936,8 @@ export default function PipelineEditorPage() {
                     <DesignStepForm
                       entities={entities}
                       onEntitiesChange={handleEntitiesChange}
-                      onValidate={() => {
-                        // Sync entities to YAML and validate
-                        const newYaml = entitiesToYaml(entities)
-                        setVhhConfigYaml(newYaml)
-                        setYamlHasChanges(true)
-                        
-                        // Validate the YAML content
-                        const result = validateYamlContent(newYaml)
-                        setYamlValidationResult(result)
-                        
-                        // Show validation message
-                        if (result.isValid) {
-                          setYamlSaveMessage('Design validated successfully!')
-                        } else {
-                          setYamlSaveMessage(`Validation failed: ${result.errors?.join(', ') || 'Invalid design'}`)
-                        }
-                        
-                        // Clear message after 3 seconds
-                        setTimeout(() => setYamlSaveMessage(null), 3000)
-                      }}
+                      onValidate={handleValidateDesign}
+                      onLoadExample={handleLoadExampleDesign}
                     />
                   ) : (
                     <>
@@ -1052,6 +1194,28 @@ export default function PipelineEditorPage() {
           </div>
         )}
       </div>
+
+      {/* CIF Viewer Modal */}
+      <Dialog open={showCifViewer} onOpenChange={setShowCifViewer}>
+        <DialogContent className="max-w-[95vw] !max-w-[95vw] w-[95vw] h-[95vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
+            <DialogTitle>Design Visualization</DialogTitle>
+            <DialogDescription>
+              The binding site should be highlighting a different color than the rest of the target.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 px-6 pb-6 min-h-0 overflow-hidden">
+            {cifViewerUrl && (
+              <iframe
+                src={cifViewerUrl}
+                className="w-full h-full border-0 rounded-lg"
+                title="Protein Structure Viewer"
+                allowFullScreen
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
