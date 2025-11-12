@@ -23,7 +23,7 @@ import { useParams,useRouter } from 'next/navigation'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -1200,9 +1200,9 @@ export default function PipelineEditorPage() {
         <DialogContent className="max-w-[95vw] !max-w-[95vw] w-[95vw] h-[95vh] p-0 flex flex-col">
           <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
             <DialogTitle>Design Visualization</DialogTitle>
-            <p className="text-sm text-muted-foreground mt-2">
+            <DialogDescription>
               The binding site should be highlighting a different color than the rest of the target.
-            </p>
+            </DialogDescription>
           </DialogHeader>
           <div className="flex-1 px-6 pb-6 min-h-0 overflow-hidden">
             {cifViewerUrl && (
