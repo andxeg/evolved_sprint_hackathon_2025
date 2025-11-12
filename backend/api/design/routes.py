@@ -640,6 +640,16 @@ class DesignResultsView(HTTPMethodView):
             # List of files to check for
             files_to_check = []
             
+            # Add the input YAML file
+            input_yaml_path = output_dir / "uploads" / design_job.input_yaml_filename
+            if input_yaml_path.exists():
+                relative_path = input_yaml_path.relative_to(output_dir)
+                files_to_check.append({
+                    "name": design_job.input_yaml_filename,
+                    "path": str(relative_path),
+                    "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                })
+            
             # Root level CIF file
             root_cif = job_output_dir / f"{yaml_stem}.cif"
             if root_cif.exists():

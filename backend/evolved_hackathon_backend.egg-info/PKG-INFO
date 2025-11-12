@@ -6,7 +6,6 @@ Requires-Python: >=3.12
 Requires-Dist: aiofiles>=24.1.0
 Requires-Dist: alembic>=1.14.0
 Requires-Dist: attrs>=24.3.0
-Requires-Dist: dm-tree>=0.1.8
 Requires-Dist: dynaconf>=3.2.6
 Requires-Dist: motor>=3.6.1
 Requires-Dist: msgspec>=0.19.0

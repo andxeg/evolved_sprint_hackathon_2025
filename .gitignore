@@ -5,3 +5,5 @@ _pycache_
 .venv
 *.pyc
 *.egg-info
+*.nbi
+*.nbc

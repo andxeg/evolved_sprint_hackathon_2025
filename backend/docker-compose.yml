@@ -34,6 +34,11 @@ services:
     restart: always
     entrypoint: ["/app/docker-entrypoint.sh"]
     command: sanic server:create_app --host 0.0.0.0 --port 8000
+    runtime: nvidia
+    environment:
+      - ENV_FOR_DYNACONF=docker
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     depends_on:
       - db
       - redis
@@ -42,8 +47,6 @@ services:
       args:
         USER_ID: ${UID:-1002}
         GROUP_ID: ${GID:-1002}
-    environment:
-      - ENV_FOR_DYNACONF=docker
     extra_hosts:
       - "host.docker.internal:host-gateway" # allows container -> host
     ports:

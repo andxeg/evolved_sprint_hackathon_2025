@@ -1,4 +1,4 @@
-FROM python:3.12
+FROM nvidia/cuda:12.6.3-base-ubuntu24.04
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -15,21 +15,8 @@ ENV UV_COMPILE_BYTECODE=1
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#caching
 ENV UV_LINK_MODE=copy
 
-RUN apt-get update && apt-get install -y gcc
-RUN curl -fsSL https://get.docker.com -o get-docker.sh
-RUN sh get-docker.sh
-
-# Install kubectl
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
-    chmod +x kubectl && \
-    mv kubectl /usr/local/bin/
-
-# Install AWS CLI v2
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-    apt-get install -y unzip && \
-    unzip awscliv2.zip && \
-    ./aws/install && \
-    rm -rf aws awscliv2.zip
+RUN apt-get update && apt-get install -y gcc clang build-essential python3-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set up user (use build args to allow customization, default to 1002 to match host)
 ARG USER_ID=1002
