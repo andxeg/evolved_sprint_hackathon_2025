@@ -48,7 +48,7 @@ class BinderOptimizationPipeline:
                 config = yaml.safe_load(f)
 
             # Validate required fields
-            required_keys = ['project', 'targets', 'parameters', 'output']
+            required_keys = ['project', 'targets', 'parameters']
             for key in required_keys:
                 if key not in config:
                     raise ValueError(f"Missing required config section: {key}")
@@ -358,7 +358,8 @@ class BinderOptimizationPipeline:
         """Generate final outputs in requested formats."""
         print("\n[Stage 6/7] Generating output files...")
 
-        output_formats = self.config['output'].get('format', ['csv', 'json'])
+        # Default to always use csv, json, and plots formats
+        output_formats = ['csv', 'json', 'plots']
 
         # Copy CSV results
         if 'csv' in output_formats and scorer_output:

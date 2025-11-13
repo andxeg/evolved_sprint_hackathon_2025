@@ -463,6 +463,84 @@ async def run_boltzgen_pipeline(job_id: uuid.UUID, input_yaml_filename: str, pro
             print(f"Traceback: {error_trace}")
 
 
+async def run_binder_optimization_pipeline(job_id: uuid.UUID, input_yaml_filename: str) -> None:
+    """
+    Run the binder optimization pipeline in the background and update job status.
+    """
+    # Create a new database session for this background task
+    async with async_session_maker() as db:
+        try:
+            # Update status to RUNNING
+            stmt = update(DesignJob).where(DesignJob.id == job_id).values(status=DesignJobStatus.RUNNING)
+            await db.execute(stmt)
+            await db.commit()
+            
+            # Build paths
+            output_dir = Path(settings.OUTPUT_DIR)
+            yaml_path = output_dir / "uploads" / input_yaml_filename
+            
+            # Validate YAML file exists
+            if not yaml_path.exists():
+                raise FileNotFoundError(f"Input YAML file not found: {yaml_path}")
+            
+            # Get the backend root directory (parent of api/)
+            backend_root = Path(__file__).parent.parent.parent
+            script_path = backend_root / "scripts" / "optimize_binder.py"
+            
+            # Validate script exists
+            if not script_path.exists():
+                raise FileNotFoundError(f"Script not found: {script_path}")
+            
+            # Build command: uv run python scripts/optimize_binder.py <full input YAML path> --id <job_id>
+            # Use relative path for script since we set cwd to backend_root
+            cmd = [
+                "uv", "run", "python", "scripts/optimize_binder.py",
+                str(yaml_path),
+                "--id", str(job_id)
+            ]
+            
+            # Debug logging
+            print(f"Running binder optimization pipeline for job {job_id}")
+            print(f"YAML path: {yaml_path} (exists: {yaml_path.exists()})")
+            print(f"Command: {' '.join(cmd)}")
+            
+            # Run the command in a thread pool to avoid blocking the event loop
+            loop = asyncio.get_event_loop()
+            process = await loop.run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    cmd,
+                    cwd=str(backend_root),
+                    check=True,
+                    capture_output=False
+                )
+            )
+            
+            # If we get here, the command completed successfully
+            new_status = DesignJobStatus.COMPLETED
+            print(f"Binder optimization pipeline completed successfully for job {job_id}")
+            
+            # Update status in database
+            stmt = update(DesignJob).where(DesignJob.id == job_id).values(status=new_status)
+            await db.execute(stmt)
+            await db.commit()
+            
+        except Exception as e:
+            # Update status to FAILED on exception
+            try:
+                stmt = update(DesignJob).where(DesignJob.id == job_id).values(status=DesignJobStatus.FAILED)
+                await db.execute(stmt)
+                await db.commit()
+            except Exception as db_error:
+                await db.rollback()
+                print(f"Error updating job status in database: {str(db_error)}")
+            
+            # Log the full exception with traceback
+            error_trace = traceback.format_exc()
+            print(f"Error running binder optimization pipeline for job {job_id}: {str(e)}")
+            print(f"Traceback: {error_trace}")
+
+
 class DesignCreateView(HTTPMethodView):
     @openapi.definition(
         response={
@@ -491,6 +569,7 @@ class DesignCreateView(HTTPMethodView):
                 num_designs=body.numDesigns,
                 status=DesignJobStatus.PENDING,
                 pipeline_name=body.pipelineName,
+                operating_mode=body.operatingMode,
             )
             
             # Add to session
@@ -632,7 +711,12 @@ class DesignResultsView(HTTPMethodView):
             
             # Build the job output directory path
             output_dir = Path(settings.OUTPUT_DIR)
-            job_output_dir = output_dir / "boltzgen_outputs" / str(job_id)
+            base_job_output_dir = output_dir / "boltzgen_outputs" / str(job_id)
+            job_output_dir = base_job_output_dir
+            
+            # If operating_mode is BINDER_OPTIMIZATION, append "workbench" to the path
+            if design_job.operating_mode == "BINDER_OPTIMIZATION":
+                job_output_dir = job_output_dir / "workbench" 
             
             # Get the input YAML filename stem (without extension) for pattern matching
             yaml_stem = Path(design_job.input_yaml_filename).stem
@@ -741,10 +825,54 @@ class DesignResultsView(HTTPMethodView):
                         "url": f"/v1/files/{'/'.join(relative_path.parts)}",
                     })
             
+            # Additional files for BINDER_OPTIMIZATION mode
+            if design_job.operating_mode == "BINDER_OPTIMIZATION":
+                # ranked_designs.csv at base level
+                ranked_designs_csv = base_job_output_dir / "ranked_designs.csv"
+                if ranked_designs_csv.exists():
+                    relative_path = ranked_designs_csv.relative_to(output_dir)
+                    files_to_check.append({
+                        "name": ranked_designs_csv.name,
+                        "path": str(relative_path),
+                        "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                    })
+                
+                # Files in plots directory
+                plots_dir = base_job_output_dir / "plots"
+                if plots_dir.exists():
+                    plot_files = [
+                        "affinity_vs_selectivity.png",
+                        "binding_profile_heatmap.png",
+                        "pareto_frontier.png",
+                        "selectivity_dashboard.png",
+                        "summary_statistics.csv"
+                    ]
+                    for plot_file in plot_files:
+                        plot_path = plots_dir / plot_file
+                        if plot_path.exists():
+                            relative_path = plot_path.relative_to(output_dir)
+                            files_to_check.append({
+                                "name": plot_file,
+                                "path": str(relative_path),
+                                "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                            })
+            
+            # Convert to dict for response
+            job_dict = design_job.to_dict()
+            
+            # Convert non-JSON-serializable types to strings
+            for key, value in job_dict.items():
+                if isinstance(value, uuid.UUID):
+                    job_dict[key] = str(value)
+                elif isinstance(value, datetime):
+                    job_dict[key] = value.isoformat()
+                elif hasattr(value, "value"):  # Handle enums
+                    job_dict[key] = value.value
+            
             return response.json(
                 {
                     "message": "Design job results retrieved successfully",
-                    "job_id": str(job_id),
+                    "job": job_dict,
                     "files": files_to_check,
                     "count": len(files_to_check),
                 },
@@ -759,6 +887,79 @@ class DesignResultsView(HTTPMethodView):
                 message=f"Failed to retrieve design job results: {str(e)}",
             )
 
+class DesignCreateBinderOptimizationView(HTTPMethodView):
+    @openapi.definition(
+        response={
+            200: dict[str, Any],
+            400: ErrorResponse,
+            500: ErrorResponse,
+        },
+    )
+    @validate(json=DesignInput)
+    async def post(self, request: Request, body: DesignInput) -> Any:
+        """
+        Create a new design job in the database.
+        
+        Receives the same payload as the design check endpoint and creates a DesignJob
+        record with status PENDING, then starts the binder optimization pipeline.
+        """
+        # Get database session from request context
+        db: AsyncSession = request.ctx.postgres_db
+        
+        try:
+            # Create a new DesignJob
+            design_job = DesignJob(
+                input_yaml_filename=body.inputYamlFilename,
+                budget=body.budget,
+                protocol_name=body.protocolName,
+                num_designs=body.numDesigns,
+                status=DesignJobStatus.PENDING,
+                pipeline_name=body.pipelineName,
+                operating_mode=body.operatingMode,
+            )
+            
+            # Add to session
+            db.add(design_job)
+            await db.flush()  # Flush to get the ID without committing
+            job_id = design_job.id
+            
+            # Commit the job creation
+            await db.commit()
+            
+            # Start the binder optimization pipeline in the background
+            asyncio.create_task(
+                run_binder_optimization_pipeline(
+                    job_id=job_id,
+                    input_yaml_filename=body.inputYamlFilename,
+                )
+            )
+            
+            # Convert to dict for response
+            job_dict = design_job.to_dict()
+            
+            # Convert non-JSON-serializable types to strings
+            for key, value in job_dict.items():
+                if isinstance(value, uuid.UUID):
+                    job_dict[key] = str(value)
+                elif isinstance(value, datetime):
+                    job_dict[key] = value.isoformat()
+                elif hasattr(value, "value"):  # Handle enums
+                    job_dict[key] = value.value
+            
+            return response.json(
+                {
+                    "message": "Design job created successfully and pipeline started",
+                    "job": job_dict,
+                },
+                status=HTTPStatus.CREATED,
+            )
+            
+        except Exception as e:
+            await db.rollback()
+            raise SanicException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                message=f"Failed to create design job: {str(e)}",
+            )
 
 design_v1.add_route(DesignCheckView.as_view(), "/design/check")
 design_v1.add_route(DesignCreateView.as_view(), "/design/create")
@@ -766,3 +967,4 @@ design_v1.add_route(DesignListView.as_view(), "/design/list")
 design_v1.add_route(DesignResultsView.as_view(), "/design/results/<job_id>")
 design_v1.add_route(DesignFileView.as_view(), "/upload")
 design_v1.add_route(DesignFileServeView.as_view(), "/files/<file_path:path>")
+design_v1.add_route(DesignCreateBinderOptimizationView.as_view(), "/design/create/binder-optimization")

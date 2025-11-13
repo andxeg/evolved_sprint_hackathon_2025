@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import UUID, DateTime, Integer, String
+from sqlalchemy import UUID, Boolean, DateTime, Integer, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -43,3 +43,9 @@ class DesignJob(Base):
     num_designs: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[DesignJobStatus] = mapped_column(SQLEnum(DesignJobStatus), default=DesignJobStatus.PENDING)
     pipeline_name: Mapped[str] = mapped_column(String(255), nullable=True)
+    
+    operating_mode: Mapped[str] = mapped_column(String(255), nullable=True)
+    run_time_in_seconds: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    parent_design_job_id: Mapped[uuid.UUID] = mapped_column(UUID, nullable=True)
+    is_child_design_job: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
