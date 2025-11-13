@@ -56,9 +56,25 @@ type DesignResultFile = {
   url: string
 }
 
+type JobDetail = {
+  id: string
+  input_yaml_filename: string
+  budget: number
+  protocol_name: string
+  num_designs: number
+  status: string
+  pipeline_name: string
+  operating_mode?: string
+  run_time_in_seconds?: number
+  parent_design_job_id?: string | null
+  is_child_design_job?: boolean | null
+  created_at: string
+  updated_at: string
+}
+
 type DesignResultsResponse = {
   message: string
-  job_id: string
+  job: JobDetail
   files: DesignResultFile[]
   count: number
 }
@@ -79,6 +95,7 @@ export default function JobResultsPage() {
   const [yamlContent, setYamlContent] = useState<string | null>(null)
   const [isLoadingYaml, setIsLoadingYaml] = useState(false)
   const [yamlError, setYamlError] = useState<string | null>(null)
+  const [topRankSummary, setTopRankSummary] = useState<Record<string, string> | null>(null)
 
   const fetchJobResults = useCallback(async () => {
     if (!jobId) return
@@ -210,6 +227,42 @@ export default function JobResultsPage() {
     }
   }
 
+  // Load top-rank summary from final_designs_metrics_2.csv (first row)
+  useEffect(() => {
+    const loadTopRank = async () => {
+      if (!results || !results.files?.length) return
+      const csvFile = results.files.find(f => f.name === 'final_designs_metrics_2.csv')
+      if (!csvFile) {
+        setTopRankSummary(null)
+        return
+      }
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}${csvFile.url}`, { credentials: 'include' })
+        if (!response.ok) throw new Error('Failed to fetch top-rank CSV')
+        const csvText = await response.text()
+        const { headers, rows } = parseCSV(csvText)
+        if (rows.length === 0) {
+          setTopRankSummary(null)
+          return
+        }
+        const first = rows[0] || {}
+        const summary: Record<string, string> = {
+          designed_sequence: String(first['designed_sequence'] ?? ''),
+          design_to_target_iptm: String(first['design_to_target_iptm'] ?? ''),
+          design_ptm: String(first['design_ptm'] ?? ''),
+          target_ptm: String(first['target_ptm'] ?? ''),
+          quality_score: String(first['quality_score'] ?? ''),
+        }
+        setTopRankSummary(summary)
+      } catch (e) {
+        // Non-fatal: just skip summary
+        setTopRankSummary(null)
+      }
+    }
+    loadTopRank()
+  }, [results])
+
   const fetchYamlData = async (fileUrl: string) => {
     setIsLoadingYaml(true)
     setYamlError(null)
@@ -298,7 +351,7 @@ export default function JobResultsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <div className="container mx-auto p-6 max-w-7xl min-h-screen overflow-auto">
       {/* Header */}
       <div className="mb-6">
         <Button
@@ -309,14 +362,104 @@ export default function JobResultsPage() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Jobs
         </Button>
-        <h1 className="text-3xl font-bold">Job Results</h1>
-        <p className="text-muted-foreground mt-2">
-          Job ID: {results.job_id}
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">
-          {results.count} file{results.count !== 1 ? 's' : ''} available
-        </p>
+        <h1 className="text-3xl font-bold">{results.job?.pipeline_name || 'Job Results'}</h1>
+        {/* Embed + Top-rank summary side by side */}
+        {(() => {
+          const rank1 = results.files.find(f => f.name.startsWith('rank1_') && f.name.toLowerCase().endsWith('.cif'))
+          if (!rank1) return null
+          return (
+            <div className="mt-4 flex gap-4">
+              {/* 80% viewer */}
+              <div className="w-4/5 h-[480px] border rounded-lg overflow-hidden">
+                <iframe
+                  src={getCifViewerUrl(rank1.url)}
+                  className="w-full h-full border-0 rounded-lg"
+                  title="Rank 1 Design Viewer"
+                  allowFullScreen
+                />
+              </div>
+              {/* 20% summary list */}
+              <div className="w-1/5 h-[480px] border rounded-lg p-0 overflow-auto">
+                <div className="px-3 py-2 border-b">
+                  <h3 className="text-base font-semibold">Rank 1 Metrics</h3>
+                </div>
+                {topRankSummary ? (
+                  <div className="divide-y">
+                    <div className="flex items-start justify-between px-3 py-3">
+                      <div className="text-sm font-semibold text-foreground pr-2">designed_sequence</div>
+                      <div className="text-xs font-mono text-right break-all max-w-[55%]">{topRankSummary.designed_sequence}</div>
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-3">
+                      <div className="text-sm font-semibold text-foreground pr-2">design_to_target_iptm</div>
+                      <div className="text-sm text-right">{topRankSummary.design_to_target_iptm}</div>
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-3">
+                      <div className="text-sm font-semibold text-foreground pr-2">design_ptm</div>
+                      <div className="text-sm text-right">{topRankSummary.design_ptm}</div>
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-3">
+                      <div className="text-sm font-semibold text-foreground pr-2">target_ptm</div>
+                      <div className="text-sm text-right">{topRankSummary.target_ptm}</div>
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-3">
+                      <div className="text-sm font-semibold text-foreground pr-2">quality_score</div>
+                      <div className="text-sm text-right">{topRankSummary.quality_score}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground px-3 py-3">No summary available.</p>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+        <div className="mt-3">
+          <Table>
+            <TableBody>
+              <TableRow>
+                <TableCell className="font-medium">Status</TableCell>
+                <TableCell>{results.job?.status?.toUpperCase() || 'N/A'}</TableCell>
+                <TableCell className="font-medium">Mode</TableCell>
+                <TableCell>{results.job?.operating_mode || 'N/A'}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Protocol</TableCell>
+                <TableCell>{results.job?.protocol_name || 'N/A'}</TableCell>
+                <TableCell className="font-medium">Runtime</TableCell>
+                <TableCell>
+                  {(() => {
+                    const total = results.job?.run_time_in_seconds
+                    if (total == null || isNaN(total)) return 'N/A'
+                    const h = Math.floor(total / 3600)
+                    const m = Math.floor((total % 3600) / 60)
+                    const s = total % 60
+                    if (h > 0) return `${h}h ${m}m`
+                    if (m > 0) return `${m}m ${s}s`
+                    return `${s}s`
+                  })()}
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Designs</TableCell>
+                <TableCell>{results.job?.num_designs ?? 'N/A'}</TableCell>
+                <TableCell className="font-medium">Budget</TableCell>
+                <TableCell>{results.job?.budget ?? 'N/A'}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Created</TableCell>
+                <TableCell>{results.job?.created_at || 'N/A'}</TableCell>
+                <TableCell className="font-medium">Updated</TableCell>
+                <TableCell>{results.job?.updated_at || 'N/A'}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+          <p className="text-sm text-muted-foreground mt-2">
+            {results.count} file{results.count !== 1 ? 's' : ''} available
+          </p>
+        </div>
       </div>
+
+      
 
       {/* Files Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

@@ -31,6 +31,8 @@ type DesignJob = {
   created_at: string
   updated_at: string
   pipeline_name: string
+  operating_mode?: string
+  run_time_in_seconds?: number
 }
 
 // Type for table display (mapped from API response)
@@ -44,6 +46,8 @@ type Pipeline = {
   protocol_name?: string
   num_designs?: number
   budget?: number
+  operating_mode?: string
+  run_time_in_seconds?: number
 }
 
 export default function PipelinesPage() {
@@ -87,7 +91,9 @@ export default function PipelinesPage() {
         description: `${job.protocol_name} - ${job.num_designs} designs - Budget: ${job.budget}`,
         protocol_name: job.protocol_name,
         num_designs: job.num_designs,
-        budget: job.budget
+        budget: job.budget,
+        operating_mode: job.operating_mode,
+        run_time_in_seconds: job.run_time_in_seconds
       }))
       
       return {
@@ -190,6 +196,39 @@ export default function PipelinesPage() {
         return (
           <span className="text-sm">
             {protocol || 'N/A'}
+          </span>
+        )
+      }
+    },
+    {
+      accessorKey: 'operating_mode',
+      header: 'Operating Mode',
+      cell: ({ row }) => {
+        const mode = row.getValue('operating_mode') as string
+        return (
+          <span className="text-sm">
+            {mode || 'N/A'}
+          </span>
+        )
+      }
+    },
+    {
+      accessorKey: 'run_time_in_seconds',
+      header: 'Runtime',
+      cell: ({ row }) => {
+        const secs = row.getValue('run_time_in_seconds') as number | undefined
+        const humanize = (total: number | undefined) => {
+          if (total == null || isNaN(total)) return 'N/A'
+          const h = Math.floor(total / 3600)
+          const m = Math.floor((total % 3600) / 60)
+          const s = total % 60
+          if (h > 0) return `${h}h ${m}m`
+          if (m > 0) return `${m}m ${s}s`
+          return `${s}s`
+        }
+        return (
+          <span className="text-sm">
+            {humanize(secs)}
           </span>
         )
       }

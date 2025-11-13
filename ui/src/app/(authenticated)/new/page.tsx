@@ -273,15 +273,10 @@ export default function PipelineEditorPage() {
   }
 
 
-  // Disable body scroll when component mounts
+  // Ensure body can scroll (remove previous scroll locking)
   useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    document.documentElement.style.overflow = 'hidden'
-    
-    return () => {
-      document.body.style.overflow = ''
-      document.documentElement.style.overflow = ''
-    }
+    document.body.style.overflow = ''
+    document.documentElement.style.overflow = ''
   }, [])
 
   // No external parameters tab; selection persists
@@ -1109,9 +1104,9 @@ export default function PipelineEditorPage() {
   const { pipeline } = pipelineData
 
   return (
-    <div className="h-full w-full flex flex-col relative -m-4 overflow-hidden max-w-full flex-1 min-h-0">
+    <div className="h-full w-full flex flex-col relative -m-4 overflow-auto max-w-full flex-1 min-h-0">
       {/* Full Screen Editor with Floating Form */}
-      <div className="flex-1 relative overflow-hidden min-h-0 w-full max-w-full">
+      <div className="flex-1 relative overflow-auto min-h-0 w-full max-w-full">
         {/* Main Editor Area - Takes full screen */}
         <div className="absolute inset-0 w-full h-full overflow-hidden">
           {/* Overview Tab - Pipeline Editor */}
