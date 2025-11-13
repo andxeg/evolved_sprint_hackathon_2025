@@ -371,6 +371,14 @@ export default function PipelineEditorPage() {
     loadPipelineNodes()
   }, [pipelineId, router, loadPipelineNodes])
 
+  // Binder mode defaults: protocol read-only 'nanobody-anything', designs 20, budget 20
+  useEffect(() => {
+    if (operatingMode === 'binder-optimization') {
+      setProtocol('nanobody-anything')
+      setNumDesigns('20')
+      setBudget('20')
+    }
+  }, [operatingMode])
   // Initialize pipeline name when component mounts
   useEffect(() => {
     if (editPipelineName && !pipelineName) {
@@ -1125,7 +1133,7 @@ export default function PipelineEditorPage() {
 
         {/* Floating Form Panel */}
         {selectedNode && (
-          <div className={`absolute top-24 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[400px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
+          <div className="absolute top-24 right-4 w-120 max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10 w-[600px]">
             <div className="p-4 h-full flex flex-col">
               {/* Floating Form Header */}
               <div className="flex items-center justify-between mb-3 flex-shrink-0">
@@ -1136,9 +1144,10 @@ export default function PipelineEditorPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setSelectedNode(null)}
-                  className="h-6 w-6 p-0"
+                  className="h-8 w-8 p-0"
+                  aria-label="Close"
                 >
-                  ×
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
 
@@ -1219,6 +1228,7 @@ export default function PipelineEditorPage() {
                         setNumDesigns={setNumDesigns}
                         budget={budget}
                         setBudget={setBudget}
+                        protocolReadOnly={operatingMode === 'binder-optimization'}
                       />
                       {/* Boltzgen Pipeline Node Details */}
                       <div className="space-y-3 pt-2 border-t">

@@ -12,6 +12,7 @@ type BoltzgenWorkflowConfigProps = {
   setNumDesigns: (v: string) => void;
   budget: string;
   setBudget: (v: string) => void;
+  protocolReadOnly?: boolean;
 };
 
 export default function BoltzgenWorkflowConfig({
@@ -21,6 +22,7 @@ export default function BoltzgenWorkflowConfig({
   setNumDesigns,
   budget,
   setBudget,
+  protocolReadOnly = false,
 }: BoltzgenWorkflowConfigProps) {
   return (
     <div className="space-y-4">
@@ -30,17 +32,21 @@ export default function BoltzgenWorkflowConfig({
           Protocol
         </Label>
         <div className="mt-2">
-          <Select value={protocol} onValueChange={setProtocol}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select protocol" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="protein-anything">protein-anything</SelectItem>
-              <SelectItem value="peptide-anything">peptide-anything</SelectItem>
-              <SelectItem value="protein-small_molecule">protein-small_molecule</SelectItem>
-              <SelectItem value="nanobody-anything">nanobody-anything</SelectItem>
-            </SelectContent>
-          </Select>
+          {protocolReadOnly ? (
+            <Input id="protocol" value={protocol} disabled />
+          ) : (
+            <Select value={protocol} onValueChange={setProtocol}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select protocol" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="protein-anything">protein-anything</SelectItem>
+                <SelectItem value="peptide-anything">peptide-anything</SelectItem>
+                <SelectItem value="protein-small_molecule">protein-small_molecule</SelectItem>
+                <SelectItem value="nanobody-anything">nanobody-anything</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           <div className="mt-2 space-y-1 text-xs text-muted-foreground">
             {protocol === 'protein-anything' && (
               <p>Design proteins to bind proteins or peptides. Includes design folding step.</p>
