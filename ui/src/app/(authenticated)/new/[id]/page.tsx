@@ -35,7 +35,6 @@ import { useToast } from '@/hooks/use-toast'
 import { getLayoutedElements } from '../../utils/layoutUtils'
 import { getPipelineData } from '../../utils/pipelineDataUtils'
 import { OverviewTab } from './components/OverviewTab'
-import { ParametersTab } from './components/ParametersTab'
 // Import new components
 import { PipelineHeader } from './components/PipelineHeader'
 import PipelineJobConfig from './components/PipelineJobConfig'
@@ -134,12 +133,7 @@ export default function PipelineEditorPage() {
     }
   }, [])
 
-  // Clear selected node when switching to parameters tab
-  useEffect(() => {
-    if (activeTab === 'parameters') {
-      setSelectedNode(null)
-    }
-  }, [activeTab])
+  // No external parameters tab; selection persists
 
   // Function to load and render pipeline nodes based on operating mode
   const loadPipelineNodes = useCallback((mode: string) => {
@@ -1011,23 +1005,11 @@ export default function PipelineEditorPage() {
             />
           )}
 
-          {/* Default Parameters Tab */}
-          {activeTab === 'parameters' && (
-            <ParametersTab
-              onResetToDefaults={handleYamlReset}
-              onSaveChanges={handleYamlSave}
-              vhhConfigYaml={vhhConfigYaml}
-              onYamlChange={handleYamlChange}
-              hasChanges={yamlHasChanges}
-              validationResult={yamlValidationResult}
-              saveMessage={yamlSaveMessage}
-              isResetting={yamlIsResetting}
-            />
-          )}
+          {/* Parameters tab removed; YAML editor moved into Design form */}
         </div>
 
         {/* Floating Form Panel */}
-        {selectedNode && activeTab !== 'parameters' && (
+        {selectedNode && (
           <div className={`absolute top-4 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[600px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
             <div className="p-4 h-full flex flex-col">
               {/* Floating Form Header */}
@@ -1048,7 +1030,6 @@ export default function PipelineEditorPage() {
               {/* Floating Form Content - Scrollable Area */}
               <div className="flex-1 min-h-0 overflow-hidden">
                 <div className="h-full overflow-y-auto pr-2">
-                  {/* Design Step Form */}
                   {selectedNode.data?.type === 'design' ? (
                     <DesignStepForm
                       entities={entities}
@@ -1057,6 +1038,13 @@ export default function PipelineEditorPage() {
                       onLoadExample={handleLoadExampleDesign}
                       isLoadingExample={isLoadingExample}
                       isValidatingDesign={isValidatingDesign}
+                      yamlValue={vhhConfigYaml}
+                      onYamlChange={handleYamlChange}
+                      onYamlSave={handleYamlSave}
+                      onYamlReset={handleYamlReset}
+                      yamlHasChanges={yamlHasChanges}
+                      yamlSaveMessage={yamlSaveMessage}
+                      isYamlResetting={yamlIsResetting}
                     />
                   ) : selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen' ? (
                     <>
@@ -1316,7 +1304,7 @@ export default function PipelineEditorPage() {
         )}
 
         {/* Floating Job Configuration Panel */}
-        {showJobConfig && activeTab !== 'parameters' && (
+        {showJobConfig && (
           <div className="absolute top-4 left-4 w-72 max-w-[calc(100vw-2rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10">
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
@@ -1376,7 +1364,7 @@ export default function PipelineEditorPage() {
         )}
 
         {/* Job Config Toggle Button (when panel is hidden) */}
-        {!showJobConfig && activeTab !== 'parameters' && (
+        {!showJobConfig && (
           <div className="absolute top-4 left-4 z-10">
             <Button
               variant="outline"
