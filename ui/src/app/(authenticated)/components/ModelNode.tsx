@@ -158,6 +158,7 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
         minWidth: '200px',
         maxWidth: '300px',
         height: '60px',
+        marginTop: '8px',
         display: 'flex',
         alignItems: 'center',
         padding: '8px 12px',

@@ -922,7 +922,7 @@ export default function PipelineEditorPage() {
 
         {/* Floating Form Panel */}
         {selectedNode && (
-          <div className={`absolute top-4 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[400px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
+          <div className={`absolute top-16 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[400px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
             <div className="p-4 h-full flex flex-col">
               {/* Floating Form Header */}
               <div className="flex items-center justify-between mb-3 flex-shrink-0">

@@ -10,10 +10,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // Hide footer on /new and /jobs pages
   const hideFooter = pathname === '/new' || pathname?.startsWith('/jobs')
   const isJobsPage = pathname?.startsWith('/jobs')
+  const hideHeader = pathname === '/new'
   
   return (
     <div className={`flex flex-col min-h-screen ${isJobsPage ? 'overflow-hidden h-screen' : ''}`}>
-      <Header />
+      {!hideHeader && <Header />}
       <LayoutContent>
         {children}
       </LayoutContent>

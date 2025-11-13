@@ -1,8 +1,6 @@
 'use client'
 
 import {
-  Background,
-  BackgroundVariant,
   type ColorMode,
   Connection,
   ConnectionLineType,
@@ -32,12 +30,6 @@ function FlowContent({ colorMode }: { colorMode: ColorMode }) {
   return (
     <>
       <Controls />
-      <Background 
-        variant={BackgroundVariant.Dots} 
-        gap={12} 
-        size={1}
-        color={colorMode === 'dark' ? '#374151' : '#e5e7eb'}
-      />
     </>
   )
 }
@@ -51,11 +43,36 @@ export function OverviewTab({
   onNodeClick,
   colorMode
 }: OverviewTabProps) {
+  const instanceRef = React.useRef<any>(null)
+
+  // Center and fit the view on init, on data changes, and on resize
+  const fitToView = React.useCallback(() => {
+    const inst = instanceRef.current
+    try {
+      // Fit all nodes nicely within the viewport
+      inst?.fitView?.({ padding: 0.2, includeHiddenNodes: true })
+    } catch {}
+  }, [])
+
+  React.useEffect(() => {
+    fitToView()
+    // Re-fit shortly after to account for layout reflows
+    const id = setTimeout(fitToView, 50)
+    return () => clearTimeout(id)
+  }, [nodes, edges, fitToView])
+
+  React.useEffect(() => {
+    const onResize = () => fitToView()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [fitToView])
+
   return (
     <div className="relative h-full min-h-0 w-full overflow-hidden">
       {/* Main Flow Area */}
       <div className="h-full w-full overflow-hidden">
         <ReactFlow
+          className="bg-background"
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
@@ -64,7 +81,10 @@ export function OverviewTab({
           onNodeClick={onNodeClick}
           nodeTypes={nodeTypes}
           connectionLineType={ConnectionLineType.SmoothStep}
-          defaultViewport={{ x: 50, y: 290, zoom: 1.2 }}
+          onInit={(instance) => {
+            instanceRef.current = instance
+            fitToView()
+          }}
           minZoom={0.3}
           maxZoom={2}
           colorMode={colorMode}
