@@ -21,6 +21,7 @@ import {
   X,
   Loader2} from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -922,7 +923,7 @@ export default function PipelineEditorPage() {
 
         {/* Floating Form Panel */}
         {selectedNode && (
-          <div className={`absolute top-16 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[400px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
+          <div className={`absolute top-24 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[400px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
             <div className="p-4 h-full flex flex-col">
               {/* Floating Form Header */}
               <div className="flex items-center justify-between mb-3 flex-shrink-0">
@@ -1217,21 +1218,21 @@ export default function PipelineEditorPage() {
 
         {/* Floating minimal Workflow Config controls - name and GPU, inline row */}
         {showJobConfig && (
-          <div className="absolute top-4 left-4 z-10">
+          <div className="absolute top-8 left-4 z-10">
             <div className="flex items-center gap-2">
               <Input
                 id="pipelineName"
                 value={pipelineName}
                 onChange={(e) => setPipelineName(e.target.value)}
                 placeholder="Pipeline name"
-                className="h-8 text-xs w-56"
+                className="h-10 text-sm md:text-base w-64"
               />
               <Select value={gpuType} onValueChange={setGpuType}>
-                <SelectTrigger className="h-8 text-xs w-44">
+                <SelectTrigger className="h-10 text-sm md:text-base w-64">
                   <SelectValue placeholder="GPU type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="8x H100 Nebius" className="text-xs">
+                  <SelectItem value="8x H100 Nebius" className="text-sm">
                     8x H100 Nebius
                   </SelectItem>
                 </SelectContent>
@@ -1240,12 +1241,15 @@ export default function PipelineEditorPage() {
           </div>
         )}
 
-        {/* Floating Start Workflow Button - Bottom right */}
-        <div className="absolute bottom-6 right-4 z-10">
+        {/* Floating Start Workflow Button - Top right */}
+        <div className="absolute top-8 right-6 z-10 flex items-center gap-6">
+          <Link href="/jobs" className="text-sm md:text-base text-gray-300 hover:text-gray-200">
+            Jobs
+          </Link>
           <Button  
             onClick={handleStartWorkflow} 
             disabled={isStartingWorkflow}
-            className="h-8 px-3"
+            className="h-10 px-4 text-sm md:text-base"
           >
             {isStartingWorkflow ? (
               <>
