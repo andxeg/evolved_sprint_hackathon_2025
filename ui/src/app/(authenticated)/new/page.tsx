@@ -36,7 +36,6 @@ import { getLayoutedElements } from '../utils/layoutUtils'
 import { getPipelineData } from '../utils/pipelineDataUtils'
 import { OverviewTab } from './components/OverviewTab'
 // Import new components
-import PipelineJobConfig from './components/PipelineJobConfig'
 import { DesignStepForm, type Entity } from './components/DesignStepForm'
 import BoltzgenWorkflowConfig from './components/BoltzgenWorkflowConfig'
 import { fetchVHHConfig } from './utils/configLoader'
@@ -1216,61 +1215,27 @@ export default function PipelineEditorPage() {
           </div>
         )}
 
-        {/* Floating Job Configuration Panel */}
+        {/* Floating minimal Workflow Config controls - name and GPU, inline row */}
         {showJobConfig && (
-          <div className="absolute top-4 left-4 w-72 max-w-[calc(100vw-2rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold text-foreground flex items-center">
-                  <Settings2 className="w-4 h-4 mr-2" />
-                  Workflow Config
-                </h3>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowJobConfig(false)}
-                    className="h-6 w-6 p-0"
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowJobConfig(false)}
-                    className="h-6 w-6 p-0"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-              <PipelineJobConfig
-                pipelineName={pipelineName}
-                setPipelineName={setPipelineName}
-                editPipelineName={editPipelineName}
-                setEditPipelineName={setEditPipelineName}
-                generatePipelineName={generatePipelineName}
-                gpuType={gpuType}
-                setGpuType={setGpuType}
-                numDesigns={numDesigns}
-                setNumDesigns={setNumDesigns}
-                budget={budget}
-                setBudget={setBudget}
-                binderLength={binderLength}
-                setBinderLength={setBinderLength}
-                binderType={binderType}
-                setBinderType={setBinderType}
-                numCandidates={numCandidates}
-                setNumCandidates={setNumCandidates}
-                affinityWeight={affinityWeight}
-                setAffinityWeight={setAffinityWeight}
-                selectivityWeight={selectivityWeight}
-                setSelectivityWeight={setSelectivityWeight}
-                propertiesWeight={propertiesWeight}
-                setPropertiesWeight={setPropertiesWeight}
-                multiObjective={multiObjective}
-                setMultiObjective={setMultiObjective}
+          <div className="absolute top-4 left-4 z-10">
+            <div className="flex items-center gap-2">
+              <Input
+                id="pipelineName"
+                value={pipelineName}
+                onChange={(e) => setPipelineName(e.target.value)}
+                placeholder="Pipeline name"
+                className="h-8 text-xs w-56"
               />
+              <Select value={gpuType} onValueChange={setGpuType}>
+                <SelectTrigger className="h-8 text-xs w-44">
+                  <SelectValue placeholder="GPU type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="8x H100 Nebius" className="text-xs">
+                    8x H100 Nebius
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}
