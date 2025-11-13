@@ -133,12 +133,13 @@ export default function JobResultsPage() {
     return filename.split('.').pop()?.toLowerCase() || ''
   }
 
-  const getFileType = (filename: string): 'cif' | 'pdf' | 'csv' | 'yaml' | 'other' => {
+  const getFileType = (filename: string): 'cif' | 'pdf' | 'csv' | 'yaml' | 'image' | 'other' => {
     const ext = getFileExtension(filename)
     if (ext === 'cif') return 'cif'
     if (ext === 'pdf') return 'pdf'
     if (ext === 'csv') return 'csv'
     if (ext === 'yaml' || ext === 'yml') return 'yaml'
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'svg'].includes(ext)) return 'image'
     return 'other'
   }
 
@@ -231,7 +232,8 @@ export default function JobResultsPage() {
   useEffect(() => {
     const loadTopRank = async () => {
       if (!results || !results.files?.length) return
-      const csvFile = results.files.find(f => f.name === 'final_designs_metrics_2.csv')
+      // Match any file like final_designs_metrics_*.csv (e.g., final_designs_metrics_2.csv)
+      const csvFile = results.files.find(f => /^final_designs_metrics_.*\.csv$/i.test(f.name))
       if (!csvFile) {
         setTopRankSummary(null)
         return
@@ -365,7 +367,7 @@ export default function JobResultsPage() {
         <h1 className="text-3xl font-bold">{results.job?.pipeline_name || 'Job Results'}</h1>
         {/* Embed + Top-rank summary side by side */}
         {(() => {
-          const rank1 = results.files.find(f => f.name.startsWith('rank1_') && f.name.toLowerCase().endsWith('.cif'))
+          const rank1 = results.files.find(f => /^rank0*1_.*\.cif$/i.test(f.name))
           if (!rank1) return null
           return (
             <div className="mt-4 flex gap-4">
@@ -456,6 +458,23 @@ export default function JobResultsPage() {
           <p className="text-sm text-muted-foreground mt-2">
             {results.count} file{results.count !== 1 ? 's' : ''} available
           </p>
+          {/* Binder Optimization Selectivity Dashboard */}
+          {results.job?.operating_mode === 'BINDER_OPTIMIZATION' && (() => {
+            const dash = results.files.find(f => /selectivity_dashboard\.png$/i.test(f.name))
+            if (!dash) return null
+            return (
+              <div className="mt-6">
+                <h3 className="text-base font-semibold mb-2">Selectivity Dashboard</h3>
+                <div className="w-full border rounded-lg overflow-hidden">
+                  <img
+                    src={getPdfUrl(dash.url)}
+                    alt="Selectivity Dashboard"
+                    className="w-full h-auto object-contain"
+                  />
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -486,6 +505,19 @@ export default function JobResultsPage() {
                 <CardDescription className="text-xs line-clamp-2">
                   {file.path}
                 </CardDescription>
+                <div className="mt-3">
+                  <Button asChild size="sm" variant="outline">
+                    <a
+                      href={getPdfUrl(file.url)}
+                      download
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Download ${file.name}`}
+                    >
+                      Download
+                    </a>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )
@@ -580,6 +612,15 @@ export default function JobResultsPage() {
                 )}
                 {getFileType(selectedFile.name) === 'pdf' && (
                   <PdfViewer fileUrl={getPdfUrl(selectedFile.url)} />
+                )}
+                {getFileType(selectedFile.name) === 'image' && (
+                  <div className="w-full h-full flex items-center justify-center bg-background">
+                    <img
+                      src={getPdfUrl(selectedFile.url)}
+                      alt={selectedFile.name}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
                 )}
                 {getFileType(selectedFile.name) === 'yaml' && (
                   <YamlViewer

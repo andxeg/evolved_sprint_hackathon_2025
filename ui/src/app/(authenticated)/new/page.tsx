@@ -661,6 +661,8 @@ export default function PipelineEditorPage() {
       budget: parseInt(budget) || 2,
       pipelineName: pipelineName || generatePipelineName(),
     }
+    // Append operating mode for backend awareness
+    payload.operatingMode = operatingMode === 'binder-optimization' ? 'BINDER_OPTIMIZATION' : 'STANDARD_BOLTZGEN'
 
     // Check if any file entity has an uploaded CIF file
     const fileEntity = entities.find(e => e.type === 'file' && (e.uploadedFilename || e.path))
