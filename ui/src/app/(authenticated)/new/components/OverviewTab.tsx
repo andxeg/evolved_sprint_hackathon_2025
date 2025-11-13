@@ -16,7 +16,7 @@ import {
 import React from 'react'
 
 // Import extracted components and utilities
-import { nodeTypes } from '../../../components/ModelNode'
+import { nodeTypes } from '../../components/ModelNode'
 
 interface OverviewTabProps {
   nodes: Node[]

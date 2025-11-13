@@ -7,8 +7,8 @@ import { Header } from '@/components/header'
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   
-  // Hide footer on /new/[id] and /jobs pages
-  const hideFooter = pathname?.startsWith('/new/') || pathname?.startsWith('/jobs')
+  // Hide footer on /new and /jobs pages
+  const hideFooter = pathname === '/new' || pathname?.startsWith('/jobs')
   const isJobsPage = pathname?.startsWith('/jobs')
   
   return (

@@ -20,7 +20,7 @@ import {
   Settings2,
   X,
   Loader2} from 'lucide-react'
-import { useParams,useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -32,8 +32,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 
 // Import extracted components and utilities
-import { getLayoutedElements } from '../../utils/layoutUtils'
-import { getPipelineData } from '../../utils/pipelineDataUtils'
+import { getLayoutedElements } from '../utils/layoutUtils'
+import { getPipelineData } from '../utils/pipelineDataUtils'
 import { OverviewTab } from './components/OverviewTab'
 import { ParametersTab } from './components/ParametersTab'
 // Import new components
@@ -48,9 +48,8 @@ import { validateAndCleanYamlContent,validateYamlContent } from './utils/yaml-va
 
 export default function PipelineEditorPage() {
   const router = useRouter()
-  const params = useParams()
   const { toast } = useToast()
-  const pipelineId = params.id as string
+  const pipelineId = 'boltzgen'
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [pipelineData, setPipelineData] = useState<any>(null)
   const [activeTab, setActiveTab] = useState('overview')
