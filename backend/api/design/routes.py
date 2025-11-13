@@ -6,7 +6,7 @@ import subprocess
 import sys
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from http import HTTPStatus
 from io import StringIO
 from pathlib import Path
@@ -442,8 +442,30 @@ async def run_boltzgen_pipeline(job_id: uuid.UUID, input_yaml_filename: str, pro
             new_status = DesignJobStatus.COMPLETED
             print(f"Boltzgen pipeline completed successfully for job {job_id}")
             
-            # Update status in database
-            stmt = update(DesignJob).where(DesignJob.id == job_id).values(status=new_status)
+            # Calculate run_time_in_seconds
+            run_time_seconds = None
+            try:
+                # Get the job to access created_at
+                stmt = select(DesignJob).where(DesignJob.id == job_id)
+                result = await db.execute(stmt)
+                job = result.scalar_one_or_none()
+                if job and job.created_at:
+                    # Use timezone-naive datetime to match model's get_utc_now()
+                    now = datetime.now(timezone.utc).replace(tzinfo=None)
+                    created_at = job.created_at
+                    if isinstance(created_at, datetime):
+                        time_diff = now - created_at
+                        run_time_seconds = int(time_diff.total_seconds())
+            except Exception as time_error:
+                # Don't block completion if time calculation fails
+                print(f"Warning: Failed to calculate run_time_in_seconds for job {job_id}: {str(time_error)}")
+            
+            # Update status and run_time_in_seconds in database
+            update_values = {"status": new_status}
+            if run_time_seconds is not None:
+                update_values["run_time_in_seconds"] = run_time_seconds
+            
+            stmt = update(DesignJob).where(DesignJob.id == job_id).values(**update_values)
             await db.execute(stmt)
             await db.commit()
             
@@ -520,8 +542,30 @@ async def run_binder_optimization_pipeline(job_id: uuid.UUID, input_yaml_filenam
             new_status = DesignJobStatus.COMPLETED
             print(f"Binder optimization pipeline completed successfully for job {job_id}")
             
-            # Update status in database
-            stmt = update(DesignJob).where(DesignJob.id == job_id).values(status=new_status)
+            # Calculate run_time_in_seconds
+            run_time_seconds = None
+            try:
+                # Get the job to access created_at
+                stmt = select(DesignJob).where(DesignJob.id == job_id)
+                result = await db.execute(stmt)
+                job = result.scalar_one_or_none()
+                if job and job.created_at:
+                    # Use timezone-naive datetime to match model's get_utc_now()
+                    now = datetime.now(timezone.utc).replace(tzinfo=None)
+                    created_at = job.created_at
+                    if isinstance(created_at, datetime):
+                        time_diff = now - created_at
+                        run_time_seconds = int(time_diff.total_seconds())
+            except Exception as time_error:
+                # Don't block completion if time calculation fails
+                print(f"Warning: Failed to calculate run_time_in_seconds for job {job_id}: {str(time_error)}")
+            
+            # Update status and run_time_in_seconds in database
+            update_values = {"status": new_status}
+            if run_time_seconds is not None:
+                update_values["run_time_in_seconds"] = run_time_seconds
+            
+            stmt = update(DesignJob).where(DesignJob.id == job_id).values(**update_values)
             await db.execute(stmt)
             await db.commit()
             
