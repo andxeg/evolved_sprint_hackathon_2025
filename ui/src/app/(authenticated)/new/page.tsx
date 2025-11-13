@@ -1228,7 +1228,7 @@ export default function PipelineEditorPage() {
                 className="h-10 text-sm md:text-base w-64"
               />
               <Select value={gpuType} onValueChange={setGpuType}>
-                <SelectTrigger className="h-10 text-sm md:text-base w-64">
+                <SelectTrigger className="h-10 text-sm md:text-base w-40">
                   <SelectValue placeholder="GPU type" />
                 </SelectTrigger>
                 <SelectContent>

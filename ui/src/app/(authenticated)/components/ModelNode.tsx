@@ -7,7 +7,6 @@ import {
   Cpu,
   Database,
   Dna,
-  Layers,
   Microchip,
   Microscope,
   Play,
@@ -15,6 +14,7 @@ import {
   Split,
   Square,
   Target,
+  Workflow,
   Zap} from 'lucide-react'
 import React from 'react'
 
@@ -51,7 +51,7 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
     } else if (nodeType === 'process') {
       return <Braces className="w-4 h-4" />
     } else if (nodeType === 'pipeline') {
-      return <Layers className="w-4 h-4" />
+      return <Workflow className="w-4 h-4" />
     } else if (nodeType === 'start') {
       return <Play className="w-4 h-4" />
     } else if (nodeType === 'end') {
