@@ -247,9 +247,9 @@ export default function PipelinesPage() {
   ]
 
   return (
-    <div className="h-full flex-col">
-      <div className="p-4">
-        <div className="[&_table]:border-none [&_th]:border-none [&_td]:border-none">
+    <div className="h-full flex flex-col overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="p-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="[&_table]:border-none [&_th]:border-none [&_td]:border-none flex-1 flex flex-col min-h-0 overflow-hidden">
           <WorkflowHistory
             columns={columns}
             data={pipelines}

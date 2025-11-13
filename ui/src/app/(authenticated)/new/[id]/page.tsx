@@ -40,6 +40,7 @@ import { ParametersTab } from './components/ParametersTab'
 import { PipelineHeader } from './components/PipelineHeader'
 import PipelineJobConfig from './components/PipelineJobConfig'
 import { DesignStepForm, type Entity } from './components/DesignStepForm'
+import BoltzgenWorkflowConfig from './components/BoltzgenWorkflowConfig'
 import { fetchVHHConfig } from './utils/configLoader'
 import { validateAndCleanYamlContent,validateYamlContent } from './utils/yaml-validator'
 
@@ -63,6 +64,15 @@ export default function PipelineEditorPage() {
   const [protocol, setProtocol] = useState('protein-anything')
   const [numDesigns, setNumDesigns] = useState('10')
   const [budget, setBudget] = useState('2')
+  
+  // Binder optimization state
+  const [binderLength, setBinderLength] = useState('110-130')
+  const [binderType, setBinderType] = useState('nanobody')
+  const [numCandidates, setNumCandidates] = useState('30')
+  const [affinityWeight, setAffinityWeight] = useState('0.6')
+  const [selectivityWeight, setSelectivityWeight] = useState('0.3')
+  const [propertiesWeight, setPropertiesWeight] = useState('0.1')
+  const [multiObjective, setMultiObjective] = useState(true)
   
   const [targetFormData, setTargetFormData] = useState({
     target_id: '',
@@ -270,6 +280,12 @@ export default function PipelineEditorPage() {
     // Reset entities and form state when switching modes
     setEntities([])
     setSelectedNode(null)
+    // Set default protocol based on mode
+    if (mode === 'binder-optimization') {
+      setProtocol('existing_binder_optimization')
+    } else {
+      setProtocol('protein-anything')
+    }
   }
 
   // Initialize pipeline name when component mounts
@@ -1012,7 +1028,7 @@ export default function PipelineEditorPage() {
 
         {/* Floating Form Panel */}
         {selectedNode && activeTab !== 'parameters' && (
-          <div className={`absolute top-4 right-4 ${selectedNode.data?.type === 'design' ? 'w-[600px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
+          <div className={`absolute top-4 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[600px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
             <div className="p-4 h-full flex flex-col">
               {/* Floating Form Header */}
               <div className="flex items-center justify-between mb-3 flex-shrink-0">
@@ -1031,7 +1047,7 @@ export default function PipelineEditorPage() {
 
               {/* Floating Form Content - Scrollable Area */}
               <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="h-full">
+                <div className="h-full overflow-y-auto pr-2">
                   {/* Design Step Form */}
                   {selectedNode.data?.type === 'design' ? (
                     <DesignStepForm
@@ -1042,6 +1058,51 @@ export default function PipelineEditorPage() {
                       isLoadingExample={isLoadingExample}
                       isValidatingDesign={isValidatingDesign}
                     />
+                  ) : selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen' ? (
+                    <>
+                      {/* Workflow Config Form */}
+                      <BoltzgenWorkflowConfig
+                        protocol={protocol}
+                        setProtocol={setProtocol}
+                        numDesigns={numDesigns}
+                        setNumDesigns={setNumDesigns}
+                        budget={budget}
+                        setBudget={setBudget}
+                      />
+                      {/* Boltzgen Pipeline Node Details */}
+                      <div className="space-y-3 pt-2 border-t">
+                        <div>
+                          <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400">Type</h4>
+                          <p className="text-xs text-gray-900 dark:text-gray-100 font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded capitalize">
+                            {String(selectedNode.type || 'N/A')}
+                          </p>
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400">Description</h4>
+                          <p className="text-xs text-gray-900 dark:text-gray-100">{String(selectedNode.data?.description || 'N/A')}</p>
+                        </div>
+                        {(selectedNode.data?.substeps as string[]) && (
+                          <div>
+                            <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400 mb-2">Process Steps</h4>
+                            <div className="flex items-center flex-wrap gap-2 text-xs text-gray-900 dark:text-gray-100">
+                              {(selectedNode.data.substeps as string[]).map((step: string, index: number) => (
+                                <React.Fragment key={index}>
+                                  <span className="flex items-center gap-1">
+                                    <span className="w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium flex items-center justify-center flex-shrink-0">
+                                      {index + 1}
+                                    </span>
+                                    <span>{step}</span>
+                                  </span>
+                                  {index < (selectedNode.data.substeps as string[]).length - 1 && (
+                                    <span className="text-gray-400 dark:text-gray-500">→</span>
+                                  )}
+                                </React.Fragment>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   ) : (
                     <>
                       {/* Selected Node Details */}
@@ -1114,17 +1175,22 @@ export default function PipelineEditorPage() {
                         })()}
                         {(selectedNode.data?.substeps as string[]) && (
                           <div>
-                            <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400">Process Steps</h4>
-                            <ul className="space-y-1">
+                            <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400 mb-2">Process Steps</h4>
+                            <div className="flex items-center flex-wrap gap-2 text-xs text-gray-900 dark:text-gray-100">
                               {(selectedNode.data.substeps as string[]).map((step: string, index: number) => (
-                                <li key={index} className="flex items-center text-xs text-gray-900 dark:text-gray-100">
-                                  <span className="w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium flex items-center justify-center mr-2 flex-shrink-0">
-                                    {index + 1}
+                                <React.Fragment key={index}>
+                                  <span className="flex items-center gap-1">
+                                    <span className="w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium flex items-center justify-center flex-shrink-0">
+                                      {index + 1}
+                                    </span>
+                                    <span>{step}</span>
                                   </span>
-                                  {step}
-                                </li>
+                                  {index < (selectedNode.data.substeps as string[]).length - 1 && (
+                                    <span className="text-gray-400 dark:text-gray-500">→</span>
+                                  )}
+                                </React.Fragment>
                               ))}
-                            </ul>
+                            </div>
                           </div>
                         )}
                         {(selectedNode.data?.load_time as string) && (
@@ -1285,12 +1351,25 @@ export default function PipelineEditorPage() {
                 generatePipelineName={generatePipelineName}
                 gpuType={gpuType}
                 setGpuType={setGpuType}
-                protocol={protocol}
-                setProtocol={setProtocol}
+                operatingMode={operatingMode}
                 numDesigns={numDesigns}
                 setNumDesigns={setNumDesigns}
                 budget={budget}
                 setBudget={setBudget}
+                binderLength={binderLength}
+                setBinderLength={setBinderLength}
+                binderType={binderType}
+                setBinderType={setBinderType}
+                numCandidates={numCandidates}
+                setNumCandidates={setNumCandidates}
+                affinityWeight={affinityWeight}
+                setAffinityWeight={setAffinityWeight}
+                selectivityWeight={selectivityWeight}
+                setSelectivityWeight={setSelectivityWeight}
+                propertiesWeight={propertiesWeight}
+                setPropertiesWeight={setPropertiesWeight}
+                multiObjective={multiObjective}
+                setMultiObjective={setMultiObjective}
               />
             </div>
           </div>

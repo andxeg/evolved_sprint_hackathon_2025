@@ -7,6 +7,7 @@ import {
   Cpu,
   Database,
   Dna,
+  Layers,
   Microchip,
   Microscope,
   Play,
@@ -49,6 +50,8 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
       return <Microchip className="w-4 h-4" />
     } else if (nodeType === 'process') {
       return <Braces className="w-4 h-4" />
+    } else if (nodeType === 'pipeline') {
+      return <Layers className="w-4 h-4" />
     } else if (nodeType === 'start') {
       return <Play className="w-4 h-4" />
     } else if (nodeType === 'end') {
@@ -68,6 +71,8 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
       return 'bg-purple-500'
     } else if (nodeType === 'process') {
       return 'bg-green-500'
+    } else if (nodeType === 'pipeline') {
+      return 'bg-yellow-500'
     } else if (nodeType === 'start') {
       return 'bg-emerald-500'
     } else if (nodeType === 'end') {
@@ -128,6 +133,14 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
     
     // For other labels, return as is
     return label
+  }
+
+  const _capitalizeType = (typeValue: string) => {
+    // Capitalize first letter of each word, handling hyphens
+    return typeValue
+      .split(/[- ]/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
   }
 
   const parsedLabel = _parseNodeLabel(data.label)
@@ -238,9 +251,9 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
         <div className="text-sm font-medium text-gray-900 dark:text-gray-100 leading-tight">
           {parsedLabel.name}
         </div>
-        {parsedLabel.type && (
+        {type !== 'end' && type !== 'start' && (
           <div className="text-xs text-gray-500 dark:text-gray-400 leading-tight">
-            {parsedLabel.type}
+            {_capitalizeType(type)}
           </div>
         )}
       </div>
@@ -252,6 +265,7 @@ export const nodeTypes: NodeTypes = {
   model: ModelNode,
   input: ModelNode,
   process: ModelNode,
+  pipeline: ModelNode,
   start: ModelNode,
   end: ModelNode,
   condition: ModelNode,

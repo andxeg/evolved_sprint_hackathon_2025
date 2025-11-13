@@ -1,9 +1,11 @@
 "use client";
 
+import * as React from "react";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type PipelineJobConfigProps = {
   pipelineName: string;
@@ -13,12 +15,27 @@ type PipelineJobConfigProps = {
   generatePipelineName: () => string;
   gpuType: string;
   setGpuType: (v: string) => void;
-  protocol: string;
-  setProtocol: (v: string) => void;
-  numDesigns: string;
-  setNumDesigns: (v: string) => void;
-  budget: string;
-  setBudget: (v: string) => void;
+  operatingMode?: string;
+  // Binder optimization props
+  numDesigns?: string;
+  setNumDesigns?: (v: string) => void;
+  budget?: string;
+  setBudget?: (v: string) => void;
+  // Binder optimization props
+  binderLength?: string;
+  setBinderLength?: (v: string) => void;
+  binderType?: string;
+  setBinderType?: (v: string) => void;
+  numCandidates?: string;
+  setNumCandidates?: (v: string) => void;
+  affinityWeight?: string;
+  setAffinityWeight?: (v: string) => void;
+  selectivityWeight?: string;
+  setSelectivityWeight?: (v: string) => void;
+  propertiesWeight?: string;
+  setPropertiesWeight?: (v: string) => void;
+  multiObjective?: boolean;
+  setMultiObjective?: (v: boolean) => void;
 };
 
 export default function PipelineJobConfig({
@@ -29,119 +46,233 @@ export default function PipelineJobConfig({
   generatePipelineName,
   gpuType,
   setGpuType,
-  protocol,
-  setProtocol,
-  numDesigns,
+  operatingMode = 'standard',
+  numDesigns = '100',
   setNumDesigns,
-  budget,
+  budget = '50',
   setBudget,
+  binderLength = '110-130',
+  setBinderLength,
+  binderType = 'nanobody',
+  setBinderType,
+  numCandidates = '30',
+  setNumCandidates,
+  affinityWeight = '0.6',
+  setAffinityWeight,
+  selectivityWeight = '0.3',
+  setSelectivityWeight,
+  propertiesWeight = '0.1',
+  setPropertiesWeight,
+  multiObjective = true,
+  setMultiObjective,
 }: PipelineJobConfigProps) {
+  const isBinderOptimization = operatingMode === 'binder-optimization';
+
   return (
-    <div className="space-y-4">
+    <ScrollArea className="h-[calc(100vh-12rem)] max-h-[150px] w-full">
+      <div className="space-y-4 pr-4">
       {/* Pipeline Name Row */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <Label htmlFor="pipelineName" className="text-sm font-medium">
-            Pipeline Name
-          </Label>
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="edit-pipeline-name"
-              checked={editPipelineName}
-              onCheckedChange={(checked) => {
-                setEditPipelineName(checked);
-                if (checked) {
-                  setPipelineName(generatePipelineName());
-                }
-              }}
-            />
-            <Label htmlFor="edit-pipeline-name" className="text-xs text-gray-600">
-              Edit name
-            </Label>
-          </div>
-        </div>
+        <Label htmlFor="pipelineName" className="text-sm font-medium mb-2 block">
+          Pipeline Name
+        </Label>
         <Input
           id="pipelineName"
           value={pipelineName}
           onChange={(e) => setPipelineName(e.target.value)}
           placeholder="Enter pipeline name"
-          disabled={!editPipelineName}
         />
       </div>
 
-      {/* Protocol Row */}
-      <div>
-        <Label htmlFor="protocol" className="text-sm font-medium">
-          Protocol
-        </Label>
-        <div className="mt-2">
-          <Select value={protocol} onValueChange={setProtocol}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select protocol" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="protein-anything">protein-anything</SelectItem>
-              <SelectItem value="peptide-anything">peptide-anything</SelectItem>
-              <SelectItem value="protein-small_molecule">protein-small_molecule</SelectItem>
-              <SelectItem value="nanobody-anything">nanobody-anything</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-            {protocol === 'protein-anything' && (
-              <p>Design proteins to bind proteins or peptides. Includes design folding step.</p>
-            )}
-            {protocol === 'peptide-anything' && (
-              <p>Design (cyclic) peptides or others to bind proteins. No Cys in inverse folding. No design folding step.</p>
-            )}
-            {protocol === 'protein-small_molecule' && (
-              <p>Design proteins to bind small molecules. Includes binding affinity prediction and design folding step.</p>
-            )}
-            {protocol === 'nanobody-anything' && (
-              <p>Design nanobodies (single-domain antibodies). No Cys in inverse folding. No design folding step.</p>
-            )}
+      {/* Binder Specification (for de_novo mode only) */}
+      {isBinderOptimization && setBinderLength && setBinderType && (
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm font-semibold">Binder Specification</Label>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="binderLength" className="text-xs font-medium">
+                Length
+              </Label>
+              <Input
+                id="binderLength"
+                value={binderLength}
+                onChange={(e) => setBinderLength(e.target.value)}
+                placeholder="e.g., 110-130"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Length range for nanobody
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="binderType" className="text-xs font-medium">
+                Type
+              </Label>
+              <Select value={binderType} onValueChange={setBinderType}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nanobody">nanobody</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Binder type
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Number of Designs and Budget Row */}
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="numDesigns" className="text-sm font-medium">
-            Designs
-          </Label>
-          <div className="mt-2">
-            <Input
-              id="numDesigns"
-              type="number"
-              value={numDesigns}
-              onChange={(e) => setNumDesigns(e.target.value)}
-              placeholder="e.g., 10"
-              min="1"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Total designs to generate.
-            </p>
+      {/* Design Parameters (for binder optimization only) */}
+      {isBinderOptimization && setNumDesigns && setBudget && (
+        <div className="space-y-3 pt-1 ">
+          <Label className="text-sm font-semibold">Design Parameters</Label>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <Label htmlFor="numDesigns" className="text-xs font-medium">
+                Designs
+              </Label>
+              <Input
+                id="numDesigns"
+                type="number"
+                value={numDesigns}
+                onChange={(e) => setNumDesigns(e.target.value)}
+                placeholder="e.g., 100"
+                min="50"
+                max="2000"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Total designs to generate (50-2000)
+              </p>
+            </div>
+            {setNumCandidates && (
+              <div>
+                <Label htmlFor="numCandidates" className="text-xs font-medium">
+                  Candidates
+                </Label>
+                <Input
+                  id="numCandidates"
+                  type="number"
+                  value={numCandidates}
+                  onChange={(e) => setNumCandidates(e.target.value)}
+                  placeholder="e.g., 30"
+                  min="10"
+                  max="100"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Top N for selectivity scoring (10-100)
+                </p>
+              </div>
+            )}
+            <div>
+              <Label htmlFor="budget" className="text-xs font-medium">
+                Budget
+              </Label>
+              <Input
+                id="budget"
+                type="number"
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+                placeholder="e.g., 50"
+                min="20"
+                max="100"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                BoltzGen sampling budget (20-100)
+              </p>
+            </div>
           </div>
         </div>
-        <div>
-          <Label htmlFor="budget" className="text-sm font-medium">
-            Budget
-          </Label>
-          <div className="mt-2">
-            <Input
-              id="budget"
-              type="number"
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-              placeholder="e.g., 2"
-              min="1"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Final diversity optimized set size.
-            </p>
+      )}
+
+      {/* Scoring Configuration (for binder optimization only) */}
+      {isBinderOptimization && setAffinityWeight && setSelectivityWeight && setPropertiesWeight && setMultiObjective && (
+        <div className="space-y-3 pt-2 border-t">
+          <Label className="text-sm font-semibold">Scoring Configuration</Label>
+          <div className="space-y-3">
+            <div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label htmlFor="affinityWeight" className="text-xs font-medium">
+                    affinity
+                  </Label>
+                  <Input
+                    id="affinityWeight"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={affinityWeight}
+                    onChange={(e) => setAffinityWeight(e.target.value)}
+                    placeholder="e.g., 0.6"
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Primary target binding weight (0.0-1.0)
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="selectivityWeight" className="text-xs font-medium">
+                    selectivity
+                  </Label>
+                  <Input
+                    id="selectivityWeight"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={selectivityWeight}
+                    onChange={(e) => setSelectivityWeight(e.target.value)}
+                    placeholder="e.g., 0.3"
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Off-target avoidance weight (0.0-1.0)
+                  </p>
+                </div>
+                <div>
+                  <Label htmlFor="propertiesWeight" className="text-xs font-medium">
+                    properties
+                  </Label>
+                  <Input
+                    id="propertiesWeight"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={propertiesWeight}
+                    onChange={(e) => setPropertiesWeight(e.target.value)}
+                    placeholder="e.g., 0.1"
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Biophysical properties weight (0.0-1.0)
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="multiObjective" className="text-xs font-medium">
+                  multi_objective
+                </Label>
+                <Switch
+                  id="multiObjective"
+                  checked={multiObjective}
+                  onCheckedChange={setMultiObjective}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Enable Pareto ranking
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* GPU Type Row */}
       <div>
@@ -157,6 +288,7 @@ export default function PipelineJobConfig({
           </Select>
         </div>
       </div>
-    </div>
+      </div>
+    </ScrollArea>
   );
 }

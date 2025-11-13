@@ -1,64 +1,32 @@
 {
-  "mber": {
+  "boltzgen_standard": {
     "nodes": [
       {
         "id": "1",
         "type": "input",
         "position": { "x": 200, "y": 50 },
         "data": {
-          "label": "Design",
+          "label": "Design Specification",
           "type": "design",
           "description": "Define entities (proteins, ligands, files) and constraints for the design specification"
         }
       },
       {
         "id": "2",
-        "type": "process",
+        "type": "pipeline",
         "position": { "x": 400, "y": 50 },
         "data": {
-          "label": "Inverse Folding",
-          "type": "inverse-folding",
-          "description": "Inverse folding step"
-        }
-      },
-      {
-        "id": "3",
-        "type": "process",
-        "position": { "x": 600, "y": 50 },
-        "data": {
-          "label": "Folding",
-          "type": "folding",
-          "description": "Folding step"
-        }
-      },
-      {
-        "id": "4",
-        "type": "process",
-        "position": { "x": 800, "y": 50 },
-        "data": {
-          "label": "Design Folding",
-          "type": "design-folding",
-          "description": "Design folding step"
-        }
-      },
-      {
-        "id": "5",
-        "type": "process",
-        "position": { "x": 1000, "y": 50 },
-        "data": {
-          "label": "Analysis",
-          "type": "analysis",
-          "description": "Analysis step"
-        }
-      },
-      {
-        "id": "6",
-        "type": "process",
-        "position": { "x": 1200, "y": 50 },
-        "data": {
-          "label": "Filtering",
-          "type": "filtering",
-          "description": "Filtering step"
+          "label": "Boltzgen v0.1.2",
+          "type": "pipeline",
+          "pipelineType": "boltzgen",
+          "description": "Boltzgen pipeline with multiple processing steps",
+          "substeps": [
+            "Inverse Folding",
+            "Folding",
+            "Design Folding",
+            "Analysis",
+            "Filtering"
+          ]
         }
       }
     ],
@@ -67,34 +35,6 @@
         "id": "e1-2", 
         "source": "1", 
         "target": "2", 
-        "animated": true, 
-        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
-      },
-      { 
-        "id": "e2-3", 
-        "source": "2", 
-        "target": "3", 
-        "animated": true, 
-        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
-      },
-      { 
-        "id": "e3-4", 
-        "source": "3", 
-        "target": "4", 
-        "animated": true, 
-        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
-      },
-      { 
-        "id": "e4-5", 
-        "source": "4", 
-        "target": "5", 
-        "animated": true, 
-        "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
-      },
-      { 
-        "id": "e5-6", 
-        "source": "5", 
-        "target": "6", 
         "animated": true, 
         "style": { "stroke": "#3b82f6", "strokeWidth": 2 } 
       }
@@ -117,7 +57,7 @@
         "type": "process",
         "position": { "x": 400, "y": -50 },
         "data": {
-          "label": "Boltzgen 1",
+          "label": "Boltzgen Target (Positive)",
           "type": "boltzgen",
           "description": "Boltzgen optimization process 1"
         }
@@ -127,7 +67,7 @@
         "type": "process",
         "position": { "x": 400, "y": 150 },
         "data": {
-          "label": "Boltzgen 2",
+          "label": "Boltzgen Negative (Off-targets)",
           "type": "boltzgen",
           "description": "Boltzgen optimization process 2"
         }
@@ -137,7 +77,7 @@
         "type": "process",
         "position": { "x": 400, "y": 250 },
         "data": {
-          "label": "Boltzgen 3",
+          "label": "Boltzgen Negative 2 (Off-targets)",
           "type": "boltzgen",
           "description": "Boltzgen optimization process 3"
         }

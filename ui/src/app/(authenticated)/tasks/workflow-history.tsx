@@ -120,8 +120,8 @@ export function WorkflowHistory<TData, TValue>({
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between py-4">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex items-center justify-between py-4 flex-shrink-0">
         <div className="flex items-center space-x-4">
           <Select
             onValueChange={value =>
@@ -184,73 +184,76 @@ export function WorkflowHistory<TData, TValue>({
           {isLoading ? 'Loading...' : 'Refresh'}
         </Button>
       </div>
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map(headerGroup => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map(header => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
+      <div className="rounded-md border flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="overflow-auto flex-1">
+          <Table>
+            <TableHeader className="sticky top-0 bg-background z-10">
+              {table.getHeaderGroups().map(headerGroup => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map(header => (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <>
+                  {/* Show skeleton rows while loading */}
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      {Array.from({ length: columns.length }).map((_, cellIndex) => (
+                        <TableCell key={`skeleton-cell-${cellIndex}`} className="py-4">
+                          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </>
+              ) : table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map(row => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && 'selected'}
+                    className="cursor-pointer py-4 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    onClick={() =>
+                      onRowClick && onRowClick(row.original as TData)
+                    }
+                  >
+                    {row.getVisibleCells().map(cell => (
+                      <TableCell key={cell.id} className="py-4">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
                         )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <>
-                {/* Show skeleton rows while loading */}
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <TableRow key={`skeleton-${index}`}>
-                    {Array.from({ length: columns.length }).map((_, cellIndex) => (
-                      <TableCell key={`skeleton-cell-${cellIndex}`} className="py-4">
-                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
                       </TableCell>
                     ))}
                   </TableRow>
-                ))}
-              </>
-            ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map(row => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
-                  className="cursor-pointer py-4 hover:bg-gray-100 dark:hover:bg-gray-800"
-                  onClick={() =>
-                    onRowClick && onRowClick(row.original as TData)
-                  }
-                >
-                  {row.getVisibleCells().map(cell => (
-                    <TableCell key={cell.id} className="py-4">
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center"
+                  >
+                    {getEmptyStateMessage()}
+                  </TableCell>
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  {getEmptyStateMessage()}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
-      <br />
-      <DataTablePagination table={table} totalItems={totalItems} fetchJobs={fetchJobs} isLoading={isLoading} />
+      <div className="flex-shrink-0 pt-4">
+        <DataTablePagination table={table} totalItems={totalItems} fetchJobs={fetchJobs} isLoading={isLoading} />
+      </div>
     </div>
   )
 }

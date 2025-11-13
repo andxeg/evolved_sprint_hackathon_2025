@@ -17,12 +17,12 @@ export const getPipelineData = (pipelineId: string, operatingMode?: string) => {
   } else if (operatingMode === 'iterative-iptm') {
     diagramKey = 'iterative-iptm'
   } else {
-    // Map boltzgen to mber diagram data (backward compatibility)
-    diagramKey = pipelineId === 'boltzgen' ? 'mber' : pipelineId
+    // Map boltzgen to boltzgen_standard diagram data (backward compatibility)
+    diagramKey = pipelineId === 'boltzgen' ? 'boltzgen_standard' : pipelineId
   }
 
   return {
     pipeline,
-    diagram: diagramData[diagramKey as keyof typeof diagramData] || diagramData.mber // fallback to mber
+    diagram: diagramData[diagramKey as keyof typeof diagramData] || diagramData.boltzgen_standard // fallback to boltzgen_standard
   }
 }
