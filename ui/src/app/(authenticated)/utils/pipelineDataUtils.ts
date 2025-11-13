@@ -3,26 +3,16 @@ import diagramData from '@/app/(authenticated)/data/diagramData.json'
 import templatesData from '@/app/(authenticated)/data/templates.json'
 
 // Pipeline diagram data mapping
-export const getPipelineData = (pipelineId: string, operatingMode?: string) => {
+export const getPipelineData = (pipelineId: string) => {
   const pipeline = templatesData.find(p => p.id === pipelineId)
   
   if (!pipeline) {
     return null
   }
 
-  // Determine diagram key based on operating mode
-  let diagramKey: string
-  if (operatingMode === 'binder-optimization') {
-    diagramKey = 'binder-optimization'
-  } else if (operatingMode === 'iterative-iptm') {
-    diagramKey = 'iterative-iptm'
-  } else {
-    // Map boltzgen to boltzgen_standard diagram data (backward compatibility)
-    diagramKey = pipelineId === 'boltzgen' ? 'boltzgen_standard' : pipelineId
-  }
-
+  // With a single default diagram, return it directly
   return {
     pipeline,
-    diagram: diagramData[diagramKey as keyof typeof diagramData] || diagramData.boltzgen_standard // fallback to boltzgen_standard
+    diagram: diagramData
   }
 }

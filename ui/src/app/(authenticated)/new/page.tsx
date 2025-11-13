@@ -36,14 +36,11 @@ import { getLayoutedElements } from '../utils/layoutUtils'
 import { getPipelineData } from '../utils/pipelineDataUtils'
 import { OverviewTab } from './components/OverviewTab'
 // Import new components
-import { PipelineHeader } from './components/PipelineHeader'
 import PipelineJobConfig from './components/PipelineJobConfig'
 import { DesignStepForm, type Entity } from './components/DesignStepForm'
 import BoltzgenWorkflowConfig from './components/BoltzgenWorkflowConfig'
 import { fetchVHHConfig } from './utils/configLoader'
 import { validateAndCleanYamlContent,validateYamlContent } from './utils/yaml-validator'
-
-
 
 export default function PipelineEditorPage() {
   const router = useRouter()
@@ -53,7 +50,6 @@ export default function PipelineEditorPage() {
   const [pipelineData, setPipelineData] = useState<any>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [showJobConfig, setShowJobConfig] = useState(true)
-  const [operatingMode, setOperatingMode] = useState<string>('standard')
   
   // Job configuration state
   const [pipelineName, setPipelineName] = useState('')
@@ -134,9 +130,9 @@ export default function PipelineEditorPage() {
 
   // No external parameters tab; selection persists
 
-  // Function to load and render pipeline nodes based on operating mode
-  const loadPipelineNodes = useCallback((mode: string) => {
-    const data = getPipelineData(pipelineId, mode)
+  // Function to load and render pipeline nodes
+  const loadPipelineNodes = useCallback(() => {
+    const data = getPipelineData(pipelineId)
     if (data) {
       setPipelineData(data)
       
@@ -163,93 +159,24 @@ export default function PipelineEditorPage() {
         }
       }
       
-      // For iterative-iptm mode, don't add start/end nodes as they're already in the diagram
-      const isIterativeIptm = mode === 'iterative-iptm'
-      const nodesWithStartEnd = isIterativeIptm 
-        ? data.diagram.nodes 
-        : [startNode, ...data.diagram.nodes, endNode]
+      // Always add start/end nodes around the diagram
+      const nodesWithStartEnd = [startNode, ...data.diagram.nodes, endNode]
       
-      // Add edges from start to first node and from last node to end (only for non-iterative modes)
+      // Add edges from start to first node and from last node to end
       const firstNodeId = data.diagram.nodes[0]?.id
       const lastNodeId = data.diagram.nodes[data.diagram.nodes.length - 1]?.id
       
-      const edgesWithStartEnd = isIterativeIptm
-        ? data.diagram.edges
-        : [
-            ...data.diagram.edges,
-            ...(firstNodeId ? [{ id: 'e-start-1', source: 'start', target: firstNodeId }] : []),
-            ...(lastNodeId ? [{ id: `e-${lastNodeId}-end`, source: lastNodeId, target: 'end' }] : [])
-          ]
+      const edgesWithStartEnd = [
+        ...data.diagram.edges,
+        ...(firstNodeId ? [{ id: 'e-start-1', source: 'start', target: firstNodeId }] : []),
+        ...(lastNodeId ? [{ id: `e-${lastNodeId}-end`, source: lastNodeId, target: 'end' }] : [])
+      ]
       
       // Apply initial layout (horizontal by default)
       let { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
         nodesWithStartEnd,
         edgesWithStartEnd
       )
-      
-      // For binder-optimization mode, manually align Boltzgen 1, 2, and 3 vertically
-      if (mode === 'binder-optimization') {
-        const boltzgen1 = layoutedNodes.find(node => node.id === '2')
-        const boltzgen2 = layoutedNodes.find(node => node.id === '3')
-        const boltzgen3 = layoutedNodes.find(node => node.id === '3b')
-        
-        if (boltzgen1 && boltzgen2 && boltzgen3) {
-          // Use the x position of one of them (they should be close)
-          const centerX = (boltzgen1.position.x + boltzgen2.position.x + boltzgen3.position.x) / 3
-          
-          // Position them vertically aligned with proper spacing
-          const nodeSpacing = 100 // Vertical spacing between nodes
-          const centerY = (boltzgen1.position.y + boltzgen2.position.y + boltzgen3.position.y) / 3
-          
-          boltzgen1.position = {
-            x: centerX,
-            y: centerY - nodeSpacing
-          }
-          
-          boltzgen2.position = {
-            x: centerX,
-            y: centerY
-          }
-          
-          boltzgen3.position = {
-            x: centerX,
-            y: centerY + nodeSpacing
-          }
-        }
-      }
-      
-      // For iterative-iptm mode, manually position all nodes with consistent spacing
-      if (mode === 'iterative-iptm') {
-        const design = layoutedNodes.find(node => node.id === '1')
-        const boltzgen1 = layoutedNodes.find(node => node.id === '2')
-        const iptmScoring = layoutedNodes.find(node => node.id === '4')
-        const updateDesign = layoutedNodes.find(node => node.id === '7')
-        const end = layoutedNodes.find(node => node.id === 'end')
-        
-        if (design && boltzgen1 && iptmScoring && updateDesign && end) {
-          // Use consistent horizontal spacing
-          const horizontalSpacing = 300 // Distance between nodes horizontally (increased for better spacing)
-          const verticalSpacing = 150 // Distance between nodes vertically (increased for better spacing)
-          
-          // Position nodes horizontally aligned
-          const baseY = 50
-          
-          // Design node
-          design.position = { x: 200, y: baseY }
-          
-          // Boltzgen 1
-          boltzgen1.position = { x: 200 + horizontalSpacing, y: baseY }
-          
-          // iPTM Scoring (condition)
-          iptmScoring.position = { x: 200 + horizontalSpacing * 2, y: baseY }
-          
-          // End node (if branch from iPTM)
-          end.position = { x: 200 + horizontalSpacing * 3, y: baseY }
-          
-          // Update Design (while node, below iPTM Scoring)
-          updateDesign.position = { x: 200 + horizontalSpacing * 2, y: baseY + verticalSpacing }
-        }
-      }
       
       setNodes(layoutedNodes)
       setEdges(layoutedEdges)
@@ -262,24 +189,10 @@ export default function PipelineEditorPage() {
     }
   }, [pipelineId, router])
 
-  // Load pipeline data based on URL parameter and operating mode
+  // Load pipeline data
   useEffect(() => {
-    loadPipelineNodes(operatingMode)
-  }, [pipelineId, router, operatingMode, loadPipelineNodes])
-
-  // Handle operating mode change
-  const handleOperatingModeChange = (mode: string) => {
-    setOperatingMode(mode)
-    // Reset entities and form state when switching modes
-    setEntities([])
-    setSelectedNode(null)
-    // Set default protocol based on mode
-    if (mode === 'binder-optimization') {
-      setProtocol('existing_binder_optimization')
-    } else {
-      setProtocol('protein-anything')
-    }
-  }
+    loadPipelineNodes()
+  }, [pipelineId, router, loadPipelineNodes])
 
   // Initialize pipeline name when component mounts
   useEffect(() => {
@@ -643,6 +556,20 @@ export default function PipelineEditorPage() {
   }
 
   const handleStartWorkflow = async () => {
+    // Require at least one entity in the Design specification form
+    if (entities.length === 0) {
+      toast({
+        title: "Fill form first",
+        description: "Please add at least one entity in the Design specification node.",
+        variant: "destructive",
+      })
+      // Focus the Design node so the user can fill it
+      const designNode = nodes.find(n => (n as any)?.data?.type === 'design')
+      if (designNode) {
+        setSelectedNode(designNode as any)
+      }
+      return
+    }
     console.log('Starting workflow...')
     setIsStartingWorkflow(true)
     
@@ -974,19 +901,6 @@ export default function PipelineEditorPage() {
 
   return (
     <div className="h-full w-full flex flex-col relative -m-4 overflow-hidden max-w-full flex-1 min-h-0">
-      {/* Header */}
-      <PipelineHeader
-        pipelineTitle={pipeline.title}
-        onRun={handleStartWorkflow}
-        isFormValid={isFormValid()}
-        estimatedRuntime="15min"
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        isStartingWorkflow={isStartingWorkflow}
-        operatingMode={operatingMode}
-        onOperatingModeChange={handleOperatingModeChange}
-      />
-
       {/* Full Screen Editor with Floating Form */}
       <div className="flex-1 relative overflow-hidden min-h-0 w-full max-w-full">
         {/* Main Editor Area - Takes full screen */}
@@ -1009,7 +923,7 @@ export default function PipelineEditorPage() {
 
         {/* Floating Form Panel */}
         {selectedNode && (
-          <div className={`absolute top-4 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[600px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
+          <div className={`absolute top-4 right-4 ${selectedNode.data?.type === 'design' || (selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen') ? 'w-[400px]' : 'w-80'} max-w-[calc(100vw-2rem)] max-h-[calc(100vh-8rem)] bg-background/95 backdrop-blur-sm border rounded-xl shadow-lg z-10`}>
             <div className="p-4 h-full flex flex-col">
               {/* Floating Form Header */}
               <div className="flex items-center justify-between mb-3 flex-shrink-0">
@@ -1338,7 +1252,6 @@ export default function PipelineEditorPage() {
                 generatePipelineName={generatePipelineName}
                 gpuType={gpuType}
                 setGpuType={setGpuType}
-                operatingMode={operatingMode}
                 numDesigns={numDesigns}
                 setNumDesigns={setNumDesigns}
                 budget={budget}
@@ -1361,6 +1274,26 @@ export default function PipelineEditorPage() {
             </div>
           </div>
         )}
+
+        {/* Floating Start Workflow Button - Bottom right */}
+        <div className="absolute bottom-6 right-4 z-10">
+          <Button  
+            onClick={handleStartWorkflow} 
+            disabled={isStartingWorkflow}
+            className="h-8 px-3"
+          >
+            {isStartingWorkflow ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              <>
+                Start Workflow
+              </>
+            )}
+          </Button>
+        </div>
 
         {/* Job Config Toggle Button (when panel is hidden) */}
         {!showJobConfig && (

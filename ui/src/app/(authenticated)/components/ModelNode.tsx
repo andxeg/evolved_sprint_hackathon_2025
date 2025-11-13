@@ -156,7 +156,7 @@ export const ModelNode = ({ data, selected, type }: { data: any; selected: boole
       style={{
         width: 'auto',
         minWidth: '200px',
-        maxWidth: '350px',
+        maxWidth: '300px',
         height: '60px',
         display: 'flex',
         alignItems: 'center',

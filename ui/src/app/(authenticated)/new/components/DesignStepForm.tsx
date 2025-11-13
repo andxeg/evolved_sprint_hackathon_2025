@@ -643,25 +643,6 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
             </TabsList>
           </div>
           <div className="flex gap-2">
-            {onLoadExample && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onLoadExample}
-                disabled={isLoadingExample}
-                className="h-8 text-xs"
-              >
-                {isLoadingExample ? (
-                  <>
-                    <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  'Load Example'
-                )}
-              </Button>
-            )}
             <Select 
               value={selectedEntityType} 
               onValueChange={(v) => setSelectedEntityType(v as 'protein' | 'ligand' | 'file')}
@@ -695,6 +676,27 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
         </div>
 
         <TabsContent value="form" className="flex-1 min-h-0">
+          {onLoadExample && (
+            <div className="mb-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onLoadExample}
+                disabled={isLoadingExample}
+                className="h-8 text-xs"
+              >
+                {isLoadingExample ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Load Example'
+                )}
+              </Button>
+            </div>
+          )}
           <ScrollArea className="flex-1 min-h-0">
             <div className="space-y-3 pr-4">
               {entities.length === 0 ? (
