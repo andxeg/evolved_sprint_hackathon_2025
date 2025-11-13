@@ -126,7 +126,9 @@ export default function PipelineEditorPage() {
     projectType: 'existing_binder',
     targetsPositive: [],
     targetsNegative: [],
-    scaffold: { pdbPath: '', uploadedFilename: undefined, chains: [], design_regions: [] }
+    scaffold: { pdbPath: '', uploadedFilename: undefined, chains: [], design_regions: [] },
+    scoring: { multiObjective: true, affinity: '0.6', selectivity: '0.3', properties: '0.1' },
+    numCandidates: '5'
   })
 
   const uploadFileToApi = async (file: File): Promise<string> => {
@@ -185,6 +187,21 @@ export default function PipelineEditorPage() {
         yamlLines.push('      residues: "' + dr.residues + '"')
       })
     }
+    // parameters (from Boltzgen form)
+    yamlLines.push('')
+    yamlLines.push('parameters:')
+    yamlLines.push(`  num_designs: ${parseInt(numDesigns) || 10}`)
+    yamlLines.push(`  num_candidates: ${parseInt(binderForm.numCandidates || '5')}`)
+    yamlLines.push(`  budget: ${parseInt(budget) || 2}`)
+    // scoring
+    const s = form.scoring || { multiObjective: true, affinity: '0.6', selectivity: '0.3', properties: '0.1' }
+    yamlLines.push('')
+    yamlLines.push('scoring:')
+    yamlLines.push(`  multi_objective: ${s.multiObjective ? 'true' : 'false'}`)
+    yamlLines.push('  weights:')
+    yamlLines.push(`    affinity: ${s.affinity}`)
+    yamlLines.push(`    selectivity: ${s.selectivity}`)
+    yamlLines.push(`    properties: ${s.properties}`)
     return yamlLines.join('\n')
   }
 
@@ -196,7 +213,7 @@ export default function PipelineEditorPage() {
       setYamlHasChanges(true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [binderForm, operatingMode])
+  }, [binderForm, operatingMode, numDesigns, budget, pipelineName])
 
   const handleLoadBinderExample = async () => {
     try {
@@ -1237,6 +1254,84 @@ export default function PipelineEditorPage() {
                         )}
                       </div>
                     </>
+                  ) : selectedNode.data?.type === 'selectivity-scoring' ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs">Top N candidates</label>
+                        <Input
+                          value={binderForm.numCandidates ?? '5'}
+                          onChange={(e) => setBinderForm(prev => ({ ...prev, numCandidates: e.target.value }))}
+                          className="h-8 text-xs w-32 mt-1"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="multiObjective"
+                          type="checkbox"
+                          checked={binderForm.scoring?.multiObjective ?? true}
+                          onChange={(e) => setBinderForm(prev => ({
+                            ...prev,
+                            scoring: {
+                              multiObjective: e.target.checked,
+                              affinity: prev.scoring?.affinity ?? '0.6',
+                              selectivity: prev.scoring?.selectivity ?? '0.3',
+                              properties: prev.scoring?.properties ?? '0.1'
+                            }
+                          }))}
+                        />
+                        <label htmlFor="multiObjective" className="text-xs">multi_objective</label>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="text-xs">affinity</label>
+                          <Input
+                            value={binderForm.scoring?.affinity ?? '0.6'}
+                            onChange={(e) => setBinderForm(prev => ({
+                              ...prev,
+                              scoring: {
+                                multiObjective: prev.scoring?.multiObjective ?? true,
+                                affinity: e.target.value,
+                                selectivity: prev.scoring?.selectivity ?? '0.3',
+                                properties: prev.scoring?.properties ?? '0.1'
+                              }
+                            }))}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs">selectivity</label>
+                          <Input
+                            value={binderForm.scoring?.selectivity ?? '0.3'}
+                            onChange={(e) => setBinderForm(prev => ({
+                              ...prev,
+                              scoring: {
+                                multiObjective: prev.scoring?.multiObjective ?? true,
+                                affinity: prev.scoring?.affinity ?? '0.6',
+                                selectivity: e.target.value,
+                                properties: prev.scoring?.properties ?? '0.1'
+                              }
+                            }))}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs">properties</label>
+                          <Input
+                            value={binderForm.scoring?.properties ?? '0.1'}
+                            onChange={(e) => setBinderForm(prev => ({
+                              ...prev,
+                              scoring: {
+                                multiObjective: prev.scoring?.multiObjective ?? true,
+                                affinity: prev.scoring?.affinity ?? '0.6',
+                                selectivity: prev.scoring?.selectivity ?? '0.3',
+                                properties: e.target.value
+                              }
+                            }))}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <>
                       {/* Selected Node Details */}

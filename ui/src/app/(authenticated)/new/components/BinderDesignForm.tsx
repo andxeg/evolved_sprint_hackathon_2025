@@ -31,6 +31,13 @@ export type BinderFormState = {
   targetsPositive: BinderTarget[]
   targetsNegative: BinderTarget[]
   scaffold: BinderScaffold
+  scoring?: {
+    multiObjective: boolean
+    affinity: string
+    selectivity: string
+    properties: string
+  }
+  numCandidates?: string
 }
 
 type BinderDesignFormProps = {
