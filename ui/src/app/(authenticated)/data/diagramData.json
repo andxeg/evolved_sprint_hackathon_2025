@@ -5,7 +5,7 @@
       "type": "input",
       "position": { "x": 200, "y": 150 },
       "data": {
-        "label": "Design Specification",
+        "label": "Design Spec",
         "type": "design",
         "description": "Define entities (proteins, ligands, files) and constraints for the design specification"
       }

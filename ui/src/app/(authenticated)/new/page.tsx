@@ -39,8 +39,11 @@ import { OverviewTab } from './components/OverviewTab'
 // Import new components
 import { DesignStepForm, type Entity } from './components/DesignStepForm'
 import BoltzgenWorkflowConfig from './components/BoltzgenWorkflowConfig'
+import { BinderDesignForm, type BinderFormState } from './components/BinderDesignForm'
 import { fetchVHHConfig } from './utils/configLoader'
 import { validateAndCleanYamlContent,validateYamlContent } from './utils/yaml-validator'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { YamlEditor } from './components/YamlEditor'
 
 export default function PipelineEditorPage() {
   const router = useRouter()
@@ -50,6 +53,7 @@ export default function PipelineEditorPage() {
   const [pipelineData, setPipelineData] = useState<any>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [showJobConfig, setShowJobConfig] = useState(true)
+  const [operatingMode, setOperatingMode] = useState<'standard' | 'binder-optimization'>('standard')
   
   // Job configuration state
   const [pipelineName, setPipelineName] = useState('')
@@ -90,6 +94,7 @@ export default function PipelineEditorPage() {
   const [isLoadingExample, setIsLoadingExample] = useState(false)
   const [isValidatingDesign, setIsValidatingDesign] = useState(false)
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false)
+  const [isLoadingBinderExample, setIsLoadingBinderExample] = useState(false)
 
   // CIF viewer modal state
   const [showCifViewer, setShowCifViewer] = useState(false)
@@ -116,6 +121,140 @@ export default function PipelineEditorPage() {
     return `Pipeline_Boltzgen_${year}-${month}-${day}_${hours}:${minutes}`
   }, [])
 
+  // Binder optimization form state
+  const [binderForm, setBinderForm] = useState<BinderFormState>({
+    projectType: 'existing_binder',
+    targetsPositive: [],
+    targetsNegative: [],
+    scaffold: { pdbPath: '', uploadedFilename: undefined, chains: [], design_regions: [] }
+  })
+
+  const uploadFileToApi = async (file: File): Promise<string> => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(`${apiUrl}/v1/upload`, { method: 'POST', body: formData })
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`)
+    }
+    const data = await response.json()
+    return data.files?.[0]?.file_name || file.name
+  }
+
+  const binderToYaml = (form: BinderFormState, projectName: string): string => {
+    const yamlLines: string[] = []
+    yamlLines.push('project:')
+    yamlLines.push(`  name: "${projectName}"`)
+    yamlLines.push(`  type: "${form.projectType}"`)
+    yamlLines.push('')
+    yamlLines.push('targets:')
+    yamlLines.push('  positive:')
+    form.targetsPositive.forEach(t => {
+      if (!t.name || (!t.pdbPath && !t.uploadedFilename) || !t.chain) return
+      yamlLines.push('    - name: "' + t.name + '"')
+      yamlLines.push('      pdb: "' + (t.uploadedFilename || t.pdbPath) + '"')
+      yamlLines.push('      chain: "' + t.chain + '"')
+    })
+    yamlLines.push('  negative:')
+    form.targetsNegative.forEach(t => {
+      if (!t.name || (!t.pdbPath && !t.uploadedFilename) || !t.chain) return
+      yamlLines.push('    - name: "' + t.name + '"')
+      yamlLines.push('      pdb: "' + (t.uploadedFilename || t.pdbPath) + '"')
+      yamlLines.push('      chain: "' + t.chain + '"')
+    })
+    yamlLines.push('')
+    yamlLines.push('scaffold:')
+    if (form.scaffold.uploadedFilename || form.scaffold.pdbPath) {
+      yamlLines.push('  pdb: "' + (form.scaffold.uploadedFilename || form.scaffold.pdbPath) + '"')
+    } else {
+      yamlLines.push('  pdb: ""')
+    }
+    const chains = form.scaffold.chains
+    if (chains.length > 0) {
+      yamlLines.push('  chains: [' + chains.map(c => `"${c}"`).join(', ') + ']')
+    } else {
+      yamlLines.push('  chains: []')
+    }
+    yamlLines.push('  design_regions:')
+    if (form.scaffold.design_regions.length === 0) {
+      yamlLines.push('    []')
+    } else {
+      form.scaffold.design_regions.forEach(dr => {
+        if (!dr.chain || !dr.residues) return
+        yamlLines.push('    - chain: "' + dr.chain + '"')
+        yamlLines.push('      residues: "' + dr.residues + '"')
+      })
+    }
+    return yamlLines.join('\n')
+  }
+
+  // Keep YAML in sync when binder form changes and binder mode active
+  useEffect(() => {
+    if (operatingMode === 'binder-optimization') {
+      const yaml = binderToYaml(binderForm, pipelineName || generatePipelineName())
+      setVhhConfigYaml(yaml)
+      setYamlHasChanges(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [binderForm, operatingMode])
+
+  const handleLoadBinderExample = async () => {
+    try {
+      setIsLoadingBinderExample(true)
+      // Fetch from public and upload to API
+      const fetchAndUpload = async (publicPath: string, filename: string) => {
+        const res = await fetch(publicPath)
+        if (!res.ok) throw new Error(`Failed to fetch ${publicPath}`)
+        const blob = await res.blob()
+        const file = new File([blob], filename, { type: 'chemical/x-pdb' })
+        const uploaded = await uploadFileToApi(file)
+        return { uploaded, file }
+      }
+      const base = '/examples/binder_optimization_example'
+      const [cxcr4, ccr5, cxcr2, fab] = await Promise.all([
+        fetchAndUpload(`${base}/8u4q_cxcr4.pdb`, '8u4q_cxcr4.pdb'),
+        fetchAndUpload(`${base}/4mbs_ccr5.pdb`, '4mbs_ccr5.pdb'),
+        fetchAndUpload(`${base}/6lfo_cxcr2.pdb`, '6lfo_cxcr2.pdb'),
+        fetchAndUpload(`${base}/8u4q_fab.pdb`, '8u4q_fab.pdb'),
+      ])
+      // Set pipeline name example
+      setPipelineName(prev => prev || 'CXCR4_quick_test')
+      // Populate binder form
+      setBinderForm({
+        projectType: 'existing_binder',
+        targetsPositive: [
+          { name: 'CXCR4', chain: 'R', uploadedFilename: cxcr4.uploaded, pdbPath: cxcr4.file.name }
+        ],
+        targetsNegative: [
+          { name: 'CCR5', chain: 'A', uploadedFilename: ccr5.uploaded, pdbPath: ccr5.file.name },
+          { name: 'CXCR2', chain: 'A', uploadedFilename: cxcr2.uploaded, pdbPath: cxcr2.file.name },
+        ],
+        scaffold: {
+          uploadedFilename: fab.uploaded,
+          pdbPath: fab.file.name,
+          chains: ['H','L'],
+          design_regions: [
+            { chain: 'H', residues: '26-35,50-65,95-102' },
+            { chain: 'L', residues: '24-34,50-56,89-97' },
+          ]
+        }
+      })
+      toast({
+        title: 'Example loaded',
+        description: 'Binder optimization example loaded successfully.',
+      })
+    } catch (err) {
+      console.error('Failed to load binder example', err)
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoadingBinderExample(false)
+    }
+  }
+
 
   // Disable body scroll when component mounts
   useEffect(() => {
@@ -132,9 +271,12 @@ export default function PipelineEditorPage() {
 
   // Function to load and render pipeline nodes
   const loadPipelineNodes = useCallback(() => {
-    const data = getPipelineData(pipelineId)
+    const data = getPipelineData(pipelineId, operatingMode)
     if (data) {
       setPipelineData(data)
+      // Reset nodes/edges to avoid stale internal positions between mode switches
+      setNodes([])
+      setEdges([])
       
       // Add start and end nodes
       const startNode = {
@@ -159,17 +301,35 @@ export default function PipelineEditorPage() {
         }
       }
       
-      // Always add start/end nodes around the diagram
-      const nodesWithStartEnd = [startNode, ...data.diagram.nodes, endNode]
+      // Always wrap with start/end and connect to entry/exit nodes based on graph structure
+      const diagramNodes = data.diagram.nodes
+      const diagramEdges = data.diagram.edges
       
-      // Add edges from start to first node and from last node to end
-      const firstNodeId = data.diagram.nodes[0]?.id
-      const lastNodeId = data.diagram.nodes[data.diagram.nodes.length - 1]?.id
+      // Build in/out degree maps to find entry and exit nodes
+      const inDegree: Record<string, number> = {}
+      const outDegree: Record<string, number> = {}
+      diagramNodes.forEach(n => {
+        inDegree[n.id] = 0
+        outDegree[n.id] = 0
+      })
+      diagramEdges.forEach(e => {
+        if (outDegree[e.source] !== undefined) outDegree[e.source] += 1
+        if (inDegree[e.target] !== undefined) inDegree[e.target] += 1
+      })
+      const entryNodeIds = diagramNodes.filter(n => inDegree[n.id] === 0).map(n => n.id)
+      const exitNodeIds = diagramNodes.filter(n => outDegree[n.id] === 0).map(n => n.id)
       
+      // Fallback to first/last by order if needed
+      const fallbackFirst = diagramNodes[0]?.id
+      const fallbackLast = diagramNodes[diagramNodes.length - 1]?.id
+      const startTargets = entryNodeIds.length > 0 ? entryNodeIds : (fallbackFirst ? [fallbackFirst] : [])
+      const endSources = exitNodeIds.length > 0 ? exitNodeIds : (fallbackLast ? [fallbackLast] : [])
+      
+      const nodesWithStartEnd = [startNode, ...diagramNodes, endNode]
       const edgesWithStartEnd = [
-        ...data.diagram.edges,
-        ...(firstNodeId ? [{ id: 'e-start-1', source: 'start', target: firstNodeId }] : []),
-        ...(lastNodeId ? [{ id: `e-${lastNodeId}-end`, source: lastNodeId, target: 'end' }] : [])
+        ...diagramEdges,
+        ...startTargets.map((tid, i) => ({ id: `e-start-${tid}-${i}`, source: 'start', target: tid })),
+        ...endSources.map((sid, i) => ({ id: `e-${sid}-end-${i}`, source: sid, target: 'end' })),
       ]
       
       // Apply initial layout (horizontal by default)
@@ -187,7 +347,7 @@ export default function PipelineEditorPage() {
       // Redirect to pipelines page if pipeline not found
       router.push('/pipelines')
     }
-  }, [pipelineId, router])
+  }, [pipelineId, router, operatingMode])
 
   // Load pipeline data
   useEffect(() => {
@@ -556,19 +716,40 @@ export default function PipelineEditorPage() {
   }
 
   const handleStartWorkflow = async () => {
-    // Require at least one entity in the Design specification form
-    if (entities.length === 0) {
-      toast({
-        title: "Fill form first",
-        description: "Please add at least one entity in the Design specification node.",
-        variant: "destructive",
-      })
-      // Focus the Design node so the user can fill it
-      const designNode = nodes.find(n => (n as any)?.data?.type === 'design')
-      if (designNode) {
-        setSelectedNode(designNode as any)
+    // Validate form based on operating mode
+    if (operatingMode === 'binder-optimization') {
+      const hasPositive = binderForm.targetsPositive.some(
+        (t) => t.name && (t.uploadedFilename || t.pdbPath) && t.chain
+      )
+      const hasScaffold = Boolean(binderForm.scaffold.uploadedFilename || binderForm.scaffold.pdbPath)
+      if (!hasPositive || !hasScaffold) {
+        toast({
+          title: "Fill form first",
+          description: "Please complete binder targets and scaffold in the Design form.",
+          variant: "destructive",
+        })
+        // Focus the Binder Design node so the user can fill it
+        const binderNode = nodes.find(n => (n as any)?.data?.type === 'design_binder_optimization')
+        if (binderNode) {
+          setSelectedNode(binderNode as any)
+        }
+        return
       }
-      return
+    } else {
+      // Require at least one entity in the Design specification form
+      if (entities.length === 0) {
+        toast({
+          title: "Fill form first",
+          description: "Please add at least one entity in the Design specification node.",
+          variant: "destructive",
+        })
+        // Focus the Design node so the user can fill it
+        const designNode = nodes.find(n => (n as any)?.data?.type === 'design')
+        if (designNode) {
+          setSelectedNode(designNode as any)
+        }
+        return
+      }
     }
     console.log('Starting workflow...')
     setIsStartingWorkflow(true)
@@ -587,8 +768,11 @@ export default function PipelineEditorPage() {
       
       console.log('Start workflow payload:', payload)
       
-      // Post payload to /v1/design/create
-      const designResponse = await fetch(`${apiUrl}/v1/design/create`, {
+      // Post payload to endpoint based on operating mode
+      const createPath = operatingMode === 'binder-optimization'
+        ? '/v1/design/create/binder-optimization'
+        : '/v1/design/create'
+      const designResponse = await fetch(`${apiUrl}${createPath}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -908,6 +1092,7 @@ export default function PipelineEditorPage() {
           {/* Overview Tab - Pipeline Editor */}
           {activeTab === 'overview' && (
             <OverviewTab
+              key={operatingMode}
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
@@ -959,6 +1144,54 @@ export default function PipelineEditorPage() {
                       yamlSaveMessage={yamlSaveMessage}
                       isYamlResetting={yamlIsResetting}
                     />
+                  ) : selectedNode.data?.type === 'design_binder_optimization' ? (
+                    <Tabs defaultValue="form" className="flex flex-col h-full">
+                      <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                        <div className="flex items-center gap-3 flex-1">
+                          <TabsList className="h-8">
+                            <TabsTrigger value="form" className="px-3 py-1.5 text-xs">Form</TabsTrigger>
+                            <TabsTrigger value="yaml" className="px-3 py-1.5 text-xs">YAML</TabsTrigger>
+                          </TabsList>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleLoadBinderExample}
+                            disabled={isLoadingBinderExample}
+                            className="h-7 text-xs"
+                          >
+                            {isLoadingBinderExample ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                Loading...
+                              </>
+                            ) : (
+                              'Load Example'
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      <TabsContent value="form" className="flex-1 min-h-0">
+                        <BinderDesignForm
+                          pipelineName={pipelineName || generatePipelineName()}
+                          form={binderForm}
+                          onChange={setBinderForm}
+                          onUploadFile={uploadFileToApi}
+                        />
+                      </TabsContent>
+                      <TabsContent value="yaml" className="flex-1 min-h-0">
+                        <div className="h-[520px]">
+                          <YamlEditor
+                            value={vhhConfigYaml}
+                            onChange={() => {}}
+                            isLoading={false}
+                            error={null}
+                          />
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   ) : selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen' ? (
                     <>
                       {/* Workflow Config Form */}
@@ -1262,6 +1495,19 @@ export default function PipelineEditorPage() {
               </>
             )}
           </Button>
+        </div>
+
+        {/* Operating Mode Select - Top center */}
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-10">
+          <Select value={operatingMode} onValueChange={(v) => setOperatingMode(v as any)}>
+            <SelectTrigger className="h-10 text-sm md:text-base w-[320px]">
+              <SelectValue placeholder="Select operating mode" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="standard">Standard Boltzgen</SelectItem>
+              <SelectItem value="binder-optimization">Binder Optimization</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Job Config Toggle Button (when panel is hidden) */}
