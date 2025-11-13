@@ -322,7 +322,7 @@ export default function JobResultsPage() {
   const getCifViewerUrl = (fileUrl: string): string => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     const fullUrl = `${apiUrl}${fileUrl}`
-    return `https://nano-protein-viewer-react.juliocesar.io/?from=remote_url&url=${encodeURIComponent(fullUrl)}`
+    return `https://nano-protein-viewer-react.juliocesar.io/?from=remote_url&url=${encodeURIComponent(fullUrl)}&color=chain`
   }
 
   // Create table instance for CSV data
