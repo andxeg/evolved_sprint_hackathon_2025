@@ -20,7 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
-import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
+import { ColumnDef, flexRender, getCoreRowModel, useReactTable, type ColumnSizingState, type ColumnSizingInfoState } from '@tanstack/react-table'
 import { FileText, Loader2, ArrowLeft } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
@@ -99,8 +99,8 @@ export default function JobResultsPage() {
   const [showFileViewer, setShowFileViewer] = useState(false)
   const [csvData, setCsvData] = useState<any[]>([])
   const [csvColumns, setCsvColumns] = useState<ColumnDef<any>[]>([])
-  const [columnSizing, setColumnSizing] = useState<Record<string, number | undefined>>({})
-  const [columnSizingInfo, setColumnSizingInfo] = useState<any>({})
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
+  const [columnSizingInfo, setColumnSizingInfo] = useState<ColumnSizingInfoState>({} as ColumnSizingInfoState)
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({})
   const [isLoadingCsv, setIsLoadingCsv] = useState(false)
   const [yamlContent, setYamlContent] = useState<string | null>(null)
