@@ -9,6 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
 import {
   Table,
   TableBody,
@@ -23,6 +25,12 @@ import { FileText, Loader2, ArrowLeft } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 
 // Dynamically import PDF viewer with SSR disabled to avoid DOMMatrix issues
 const PdfViewer = dynamic(
@@ -93,6 +101,7 @@ export default function JobResultsPage() {
   const [csvColumns, setCsvColumns] = useState<ColumnDef<any>[]>([])
   const [columnSizing, setColumnSizing] = useState<Record<string, number | undefined>>({})
   const [columnSizingInfo, setColumnSizingInfo] = useState<any>({})
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({})
   const [isLoadingCsv, setIsLoadingCsv] = useState(false)
   const [yamlContent, setYamlContent] = useState<string | null>(null)
   const [isLoadingYaml, setIsLoadingYaml] = useState(false)
@@ -216,6 +225,14 @@ export default function JobResultsPage() {
       })
       
       setCsvColumns(columns)
+      // Initialize visibility: show first 7 columns by default
+      const visibilityInit: Record<string, boolean> = {}
+      const ids = columns.map(c => (c.id as string) || '')
+      const visibleCount = Math.min(7, ids.length)
+      ids.forEach((id, index) => {
+        if (id) visibilityInit[id] = index < visibleCount
+      })
+      setColumnVisibility(visibilityInit)
       setCsvData(rows)
     } catch (error) {
       console.error('Error fetching CSV:', error)
@@ -253,7 +270,6 @@ export default function JobResultsPage() {
         }
         const first = rows[0] || {}
         const summary: Record<string, string> = {
-          designed_sequence: String(first['designed_sequence'] ?? ''),
           design_to_target_iptm: String(first['design_to_target_iptm'] ?? ''),
           design_ptm: String(first['design_ptm'] ?? ''),
           target_ptm: String(first['target_ptm'] ?? ''),
@@ -339,7 +355,9 @@ export default function JobResultsPage() {
     state: {
       columnSizing,
       columnSizingInfo,
+      columnVisibility,
     },
+    onColumnVisibilityChange: setColumnVisibility,
   })
 
   if (isLoading) {
@@ -363,7 +381,8 @@ export default function JobResultsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl min-h-screen overflow-auto">
+    <ScrollArea className="h-screen w-full">
+      <div className="container mx-auto p-6 max-w-7xl pb-24">
       {/* Header */}
       <div className="mb-6">
         <Button
@@ -382,7 +401,7 @@ export default function JobResultsPage() {
           return (
             <div className="mt-4 flex gap-4">
               {/* 80% viewer */}
-              <div className="w-4/5 h-[480px] border rounded-lg overflow-hidden">
+              <div className="w-4/5 h-[640px] border rounded-lg overflow-hidden">
                 <iframe
                   src={getCifViewerUrl(rank1.url)}
                   className="w-full h-full border-0 rounded-lg"
@@ -391,36 +410,35 @@ export default function JobResultsPage() {
                 />
               </div>
               {/* 20% summary list */}
-              <div className="w-1/5 h-[480px] border rounded-lg p-0 overflow-auto">
+              <div className="w-1/5 h-[640px] border rounded-lg p-0">
                 <div className="px-3 py-2 border-b">
                   <h3 className="text-base font-semibold">Rank 1 Metrics</h3>
                 </div>
-                {topRankSummary ? (
-                  <div className="divide-y">
-                    <div className="flex items-start justify-between px-3 py-3">
-                      <div className="text-sm font-semibold text-foreground pr-2">designed_sequence</div>
-                      <div className="text-xs font-mono text-right break-all max-w-[55%]">{topRankSummary.designed_sequence}</div>
+                <ScrollArea className="h-[600px]">
+                  {topRankSummary ? (
+                    <div className="divide-y">
+                      <div className="flex items-center justify-between px-3 py-3">
+                        <div className="text-sm font-semibold text-foreground pr-2">design_to_target_iptm</div>
+                        <div className="text-sm text-right">{topRankSummary.design_to_target_iptm}</div>
+                      </div>
+                      <div className="flex items-center justify-between px-3 py-3">
+                        <div className="text-sm font-semibold text-foreground pr-2">design_ptm</div>
+                        <div className="text-sm text-right">{topRankSummary.design_ptm}</div>
+                      </div>
+                      <div className="flex items-center justify-between px-3 py-3">
+                        <div className="text-sm font-semibold text-foreground pr-2">target_ptm</div>
+                        <div className="text-sm text-right">{topRankSummary.target_ptm}</div>
+                      </div>
+                      <div className="flex items-center justify-between px-3 py-3">
+                        <div className="text-sm font-semibold text-foreground pr-2">quality_score</div>
+                        <div className="text-sm text-right">{topRankSummary.quality_score}</div>
+                      </div>
+                      <div className="h-6" />
                     </div>
-                    <div className="flex items-center justify-between px-3 py-3">
-                      <div className="text-sm font-semibold text-foreground pr-2">design_to_target_iptm</div>
-                      <div className="text-sm text-right">{topRankSummary.design_to_target_iptm}</div>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-3">
-                      <div className="text-sm font-semibold text-foreground pr-2">design_ptm</div>
-                      <div className="text-sm text-right">{topRankSummary.design_ptm}</div>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-3">
-                      <div className="text-sm font-semibold text-foreground pr-2">target_ptm</div>
-                      <div className="text-sm text-right">{topRankSummary.target_ptm}</div>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-3">
-                      <div className="text-sm font-semibold text-foreground pr-2">quality_score</div>
-                      <div className="text-sm text-right">{topRankSummary.quality_score}</div>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground px-3 py-3">No summary available.</p>
-                )}
+                  ) : (
+                    <p className="text-xs text-muted-foreground px-3 py-3">No summary available.</p>
+                  )}
+                </ScrollArea>
               </div>
             </div>
           )
@@ -564,6 +582,36 @@ export default function JobResultsPage() {
                       </div>
                     ) : csvData.length > 0 ? (
                       <div className="flex-1 overflow-auto">
+                        {/* CSV toolbar */}
+                        <div className="flex items-center justify-between p-2 border-b">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                {(() => {
+                                  const all = csvTable.getAllLeafColumns().length
+                                  const vis = csvTable.getAllLeafColumns().filter(c => c.getIsVisible()).length
+                                  return `Columns (${vis}/${all})`
+                                })()}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="max-h-80 overflow-auto">
+                              {csvTable.getAllLeafColumns().map((col) => {
+                                const id = col.id
+                                const headerLabel = String(col.columnDef.header || id)
+                                return (
+                                  <DropdownMenuCheckboxItem
+                                    key={id}
+                                    checked={col.getIsVisible()}
+                                    onCheckedChange={(value) => col.toggleVisibility(Boolean(value))}
+                                    className="capitalize"
+                                  >
+                                    {headerLabel}
+                                  </DropdownMenuCheckboxItem>
+                                )
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                         <Table className="table-fixed">
                           <TableHeader className="sticky top-0 bg-background z-10">
                             {csvTable.getHeaderGroups().map((headerGroup) => (
@@ -576,7 +624,7 @@ export default function JobResultsPage() {
                                   >
                                     <div className="flex items-center justify-between">
                                       <div className="truncate">
-                                        {header.isPlaceholder
+                                        {(header.isPlaceholder || !header.column.getIsVisible())
                                           ? null
                                           : flexRender(
                                               header.column.columnDef.header,
@@ -676,7 +724,9 @@ export default function JobResultsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+      <ScrollBar orientation="vertical" />
+    </ScrollArea>
   )
 }
 
