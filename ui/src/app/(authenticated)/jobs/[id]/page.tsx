@@ -91,6 +91,8 @@ export default function JobResultsPage() {
   const [showFileViewer, setShowFileViewer] = useState(false)
   const [csvData, setCsvData] = useState<any[]>([])
   const [csvColumns, setCsvColumns] = useState<ColumnDef<any>[]>([])
+  const [columnSizing, setColumnSizing] = useState<Record<string, number | undefined>>({})
+  const [columnSizingInfo, setColumnSizingInfo] = useState<any>({})
   const [isLoadingCsv, setIsLoadingCsv] = useState(false)
   const [yamlContent, setYamlContent] = useState<string | null>(null)
   const [isLoadingYaml, setIsLoadingYaml] = useState(false)
@@ -204,6 +206,7 @@ export default function JobResultsPage() {
           id: safeId || `column_${index}`, // Explicit ID for TanStack Table
           accessorKey: header, // Keep original header for data access
           header: header,
+          size: 180, // default width so all columns start uniform
           cell: ({ row }) => {
             // Access data directly from row.original to avoid column ID lookup issues
             const value = row.original[header]
@@ -330,6 +333,13 @@ export default function JobResultsPage() {
     data: csvData,
     columns: csvColumns,
     getCoreRowModel: getCoreRowModel(),
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
+    onColumnSizingInfoChange: setColumnSizingInfo,
+    state: {
+      columnSizing,
+      columnSizingInfo,
+    },
   })
 
   if (isLoading) {
@@ -554,18 +564,35 @@ export default function JobResultsPage() {
                       </div>
                     ) : csvData.length > 0 ? (
                       <div className="flex-1 overflow-auto">
-                        <Table>
-                          <TableHeader>
+                        <Table className="table-fixed">
+                          <TableHeader className="sticky top-0 bg-background z-10">
                             {csvTable.getHeaderGroups().map((headerGroup) => (
                               <TableRow key={headerGroup.id}>
                                 {headerGroup.headers.map((header) => (
-                                  <TableHead key={header.id} className="sticky top-0 bg-background z-10">
-                                    {header.isPlaceholder
-                                      ? null
-                                      : flexRender(
-                                          header.column.columnDef.header,
-                                          header.getContext()
-                                        )}
+                                  <TableHead
+                                    key={header.id}
+                                    style={{ width: header.getSize() }}
+                                    className="relative border-r border-muted-foreground/20"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="truncate">
+                                        {header.isPlaceholder
+                                          ? null
+                                          : flexRender(
+                                              header.column.columnDef.header,
+                                              header.getContext()
+                                            )}
+                                      </div>
+                                      {/* Resizer */}
+                                      <div
+                                        onMouseDown={header.getResizeHandler()}
+                                        onTouchStart={header.getResizeHandler()}
+                                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none bg-muted-foreground/20 hover:bg-muted-foreground/50"
+                                        role="separator"
+                                        aria-orientation="vertical"
+                                        aria-label={`Resize ${String(header.column.columnDef.header)}`}
+                                      />
+                                    </div>
                                   </TableHead>
                                 ))}
                               </TableRow>
@@ -577,13 +604,20 @@ export default function JobResultsPage() {
                                 <TableRow
                                   key={row.id}
                                   data-state={row.getIsSelected() && 'selected'}
+                                  className="border-b border-muted-foreground/10"
                                 >
                                   {row.getVisibleCells().map((cell) => (
-                                    <TableCell key={cell.id}>
-                                      {flexRender(
-                                        cell.column.columnDef.cell,
-                                        cell.getContext()
-                                      )}
+                                    <TableCell
+                                      key={cell.id}
+                                      style={{ width: cell.column.getSize() }}
+                                      className="border-r border-muted-foreground/10"
+                                    >
+                                      <div className="truncate">
+                                        {flexRender(
+                                          cell.column.columnDef.cell,
+                                          cell.getContext()
+                                        )}
+                                      </div>
                                     </TableCell>
                                   ))}
                                 </TableRow>
