@@ -110,7 +110,7 @@ async def run_boltzgen_pipeline(
             print(f"Boltzgen pipeline completed successfully for job {job_id}")
             
             if run_dual_targets:
-                await run_dual_targets_pipeline(job_id, input_yaml_filename, fasta_filename)
+                await run_dual_targets_pipeline(job_id, fasta_filename)
             
             # Calculate run_time_in_seconds
             run_time_seconds = None
@@ -256,8 +256,52 @@ async def run_binder_optimization_pipeline(job_id: uuid.UUID, input_yaml_filenam
             
             
             
-async def run_dual_targets_pipeline(job_id: uuid.UUID, input_yaml_filename: str, fasta_filename: str) -> None:
+async def run_dual_targets_pipeline(job_id: uuid.UUID, fasta_filename: str) -> None:
     """
     Run the dual-targets pipeline in the background and update job status.
     """
-    pass
+    # Paths setup
+    output_root = Path(settings.OUTPUT_DIR)
+    uploads_dir = output_root / "uploads"
+    job_dir = output_root / "boltzgen_outputs" / str(job_id)
+    ranked_dir = job_dir / "final_ranked_designs"
+    out_dir = job_dir / "YAMLs_post_processing_boltz_2_output"
+
+    # Resolve input files
+    fasta_path = uploads_dir / fasta_filename
+    if not fasta_path.exists():
+        raise FileNotFoundError(f"FASTA file not found: {fasta_path}")
+
+    csv_candidates = sorted(ranked_dir.glob("final_designs_metrics_*.csv"))
+    if not csv_candidates:
+        raise FileNotFoundError(f"No final_designs_metrics_*.csv found under {ranked_dir}")
+    csv_path = csv_candidates[0]
+
+    # Ensure output directory exists
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build and run command
+    backend_root = Path(__file__).parent.parent.parent
+    script_rel = "dual_targets/generate_multimer_yamls.py"
+    cmd = [
+        "uv", "run", "python", script_rel,
+        "--fasta", str(fasta_path),
+        "--csv", str(csv_path),
+        "--output-dir", str(out_dir),
+    ]
+
+    print(f"[DualTargets] Running: {' '.join(cmd)} (cwd={backend_root})")
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        None,
+        lambda: subprocess.run(
+            cmd,
+            cwd=str(backend_root),
+            check=True,
+            capture_output=False,
+        ),
+    )
+    print(f"[DualTargets] Generated YAMLs at: {out_dir}")
+
+
+
