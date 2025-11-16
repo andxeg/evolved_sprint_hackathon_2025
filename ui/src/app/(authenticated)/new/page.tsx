@@ -107,6 +107,7 @@ export default function PipelineEditorPage() {
   const [isGeneratingDualSpec, setIsGeneratingDualSpec] = useState(false)
   const [dualSpecYaml, setDualSpecYaml] = useState<string | null>(null)
   const [showDualSpecModal, setShowDualSpecModal] = useState(false)
+  const [isCheckingDualDesign, setIsCheckingDualDesign] = useState(false)
 
   // CIF viewer modal state
   const [showCifViewer, setShowCifViewer] = useState(false)
@@ -355,6 +356,49 @@ export default function PipelineEditorPage() {
       })
     } finally {
       setIsGeneratingDualSpec(false)
+    }
+  }
+  const handleCheckDualDesign = async () => {
+    try {
+      if (!dualSpecYaml) {
+        toast({
+          title: 'Generate spec first',
+          description: 'Please generate the design spec before checking.',
+          variant: 'destructive',
+        })
+        return
+      }
+      setIsCheckingDualDesign(true)
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const payload = await buildPayload(dualSpecYaml)
+      const designResponse = await fetch(`${apiUrl}/v1/design/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!designResponse.ok) {
+        const errorText = await designResponse.text()
+        throw new Error(`Design validation failed: ${designResponse.statusText} - ${errorText}`)
+      }
+      const designData = await designResponse.json()
+      if (designData.check_passed && designData.cif_url) {
+        const fullCifUrl = `${apiUrl}${designData.cif_url}`
+        const viewerUrl = `https://nano-protein-viewer-react.juliocesar.io/?from=remote_url&url=${encodeURIComponent(fullCifUrl)}`
+        setCifViewerUrl(viewerUrl)
+        setShowCifViewer(true)
+        toast({ title: 'Validation successful', description: 'Design validation completed successfully!' })
+      } else {
+        toast({ title: 'Validation successful', description: 'Design validation completed successfully!' })
+      }
+    } catch (error) {
+      console.error('Error validating design (dual target):', error)
+      toast({
+        title: 'Validation failed',
+        description: `Failed to validate design: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: 'destructive',
+      })
+    } finally {
+      setIsCheckingDualDesign(false)
     }
   }
 
@@ -1500,7 +1544,7 @@ export default function PipelineEditorPage() {
                         </div>
                       </div>
                       {dualSpecYaml && (
-                        <div className="pt-2">
+                        <div className="pt-2 flex items-center gap-2">
                           <Button
                             type="button"
                             variant="outline"
@@ -1508,7 +1552,24 @@ export default function PipelineEditorPage() {
                             onClick={() => setShowDualSpecModal(true)}
                             className="h-7 text-xs"
                           >
-                            Inspect design
+                            Inspect design YAML
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleCheckDualDesign}
+                            disabled={isCheckingDualDesign || !dualSpecYaml}
+                            className="h-7 text-xs"
+                          >
+                            {isCheckingDualDesign ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                Checking...
+                              </>
+                            ) : (
+                              'Check design in Mol*'
+                            )}
                           </Button>
                         </div>
                       )}

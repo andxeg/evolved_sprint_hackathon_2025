@@ -777,12 +777,12 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
                     {isValidatingDesign ? (
                       <>
                         <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                        Validating...
+                        Checking...
                       </>
                     ) : (
                       <>
                         <CheckCircle2 className="h-3 w-3 mr-2" />
-                        Validate Design
+                        Check design in Mol*
                       </>
                     )}
                   </Button>
