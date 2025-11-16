@@ -450,7 +450,7 @@ class BinderOptimizationPipeline:
         # Process each off-target
         for off_target in off_targets:
             off_target_name = off_target['name']
-            off_target_pdb = Path(off_target['pdb'])
+            off_target_pdb = Path(self.config_dir / off_target['pdb']).resolve()
 
             print(f"\n  [{off_targets.index(off_target)+1}/{len(off_targets)}] Processing off-target: {off_target_name}")
 
@@ -572,7 +572,7 @@ class BinderOptimizationPipeline:
 
                 # Use boltz predict with MSA server
                 cmd_predict = [
-                    'boltz', 'predict',
+                    'uv', 'run', 'boltz', 'predict',
                     str(yaml_file),
                     '--out_dir', str(prediction_output),
                     '--devices', '1',  # Use GPU 1

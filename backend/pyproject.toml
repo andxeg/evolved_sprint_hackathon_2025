@@ -29,7 +29,6 @@ dependencies = [
     "cryptography>=44.0.2",
     "requests>=2.32.3",
     "rcsb-api>=1.4.1",
-    "numpy==2.0.2",
     "numba==0.61.0",
     "matplotlib",
     "hydride",
@@ -55,6 +54,8 @@ dependencies = [
     "huggingface_hub",
     "biopython",
     "seaborn>=0.13.2",
+    "boltz>=2.2.1",
+    "numpy>=1.26.4",
 ]
 
 [dependency-groups]
