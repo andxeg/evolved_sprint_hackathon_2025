@@ -108,6 +108,9 @@ export default function PipelineEditorPage() {
   const [dualSpecYaml, setDualSpecYaml] = useState<string | null>(null)
   const [showDualSpecModal, setShowDualSpecModal] = useState(false)
   const [isCheckingDualDesign, setIsCheckingDualDesign] = useState(false)
+  const [dualProteinFasta, setDualProteinFasta] = useState<string | undefined>(undefined)
+  const dualFastaInputRef = useRef<HTMLInputElement | null>(null)
+  const [isLoadingFastaExample, setIsLoadingFastaExample] = useState(false)
 
   // CIF viewer modal state
   const [showCifViewer, setShowCifViewer] = useState(false)
@@ -399,6 +402,31 @@ export default function PipelineEditorPage() {
       })
     } finally {
       setIsCheckingDualDesign(false)
+    }
+  }
+  const handleLoadDualFastaExample = async () => {
+    try {
+      setIsLoadingFastaExample(true)
+      const publicPath = '/examples/dual_target/fcgr3.fasta'
+      const res = await fetch(publicPath)
+      if (!res.ok) throw new Error(`Failed to fetch ${publicPath}`)
+      const blob = await res.blob()
+      const file = new File([blob], 'fcgr3.fasta', { type: 'text/plain' })
+      const uploaded = await uploadFileToApi(file)
+      setDualProteinFasta(uploaded)
+      toast({
+        title: 'Example loaded',
+        description: uploaded,
+      })
+    } catch (err) {
+      console.error('Failed to load FASTA example', err)
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoadingFastaExample(false)
     }
   }
 
@@ -808,6 +836,10 @@ export default function PipelineEditorPage() {
       // If file was uploaded but filename not saved, use the path
       payload.cifFileFilename = fileEntity.path
     }
+    // Dual target: include uploaded FASTA file if provided
+    if (operatingMode === 'dual-target' && dualProteinFasta) {
+      payload.fastaFileFilename = dualProteinFasta
+    }
 
     return payload
   }
@@ -954,7 +986,9 @@ export default function PipelineEditorPage() {
       setValidationPayload(payload)
       const createPath = operatingMode === 'binder-optimization'
         ? '/v1/design/create/binder-optimization'
-        : '/v1/design/create'
+        : operatingMode === 'dual-target'
+          ? '/v1/design/create/dual-target'
+          : '/v1/design/create'
       const designResponse = await fetch(`${apiUrl}${createPath}`, {
         method: 'POST',
         headers: {
@@ -1632,6 +1666,89 @@ export default function PipelineEditorPage() {
                           onChange={(e) => setBinderForm(prev => ({ ...prev, numCandidates: e.target.value }))}
                           className="h-8 text-xs w-32 mt-1"
                         />
+                      </div>
+                    </div>
+                  ) : selectedNode.data?.label === 'Boltz-2 PPI Rank' ? (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Upload target sequence from a FASTA file to rank the candidates.
+                      </p>
+                      <div className="mt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleLoadDualFastaExample}
+                          disabled={isLoadingFastaExample}
+                          className="h-7 text-xs"
+                        >
+                          {isLoadingFastaExample ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            'Load Example'
+                          )}
+                        </Button>
+                      </div>
+                      <div>
+                        <Label className="text-xs">Target FASTA:</Label>
+                        <div className="mt-2">
+                          {dualProteinFasta ? (
+                            <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
+                              <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                              <span className="text-xs font-mono flex-1">
+                                {dualProteinFasta}
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setDualProteinFasta(undefined)
+                                  if (dualFastaInputRef.current) dualFastaInputRef.current.value = ''
+                                }}
+                                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="border-2 border-dashed rounded-md p-4 text-center">
+                              <input
+                                ref={dualFastaInputRef}
+                                type="file"
+                                accept=".fasta"
+                                onChange={async (e) => {
+                                  const file = e.target.files?.[0]
+                                  if (!file) return
+                                  try {
+                                    const uploaded = await uploadFileToApi(file)
+                                    setDualProteinFasta(uploaded)
+                                    toast({ title: 'Uploaded', description: uploaded })
+                                  } catch (err) {
+                                    toast({ title: 'Upload failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
+                                  } finally {
+                                    if (dualFastaInputRef.current) dualFastaInputRef.current.value = ''
+                                  }
+                                }}
+                                className="hidden"
+                                id={`dual-fasta-upload`}
+                              />
+                              <Label
+                                htmlFor={`dual-fasta-upload`}
+                                className="cursor-pointer flex flex-col items-center gap-2"
+                              >
+                                <Upload className="h-6 w-6 text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">
+                                  Click to upload or drag and drop
+                                </span>
+                                <span className="text-xs text-muted-foreground">.fasta files</span>
+                              </Label>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ) : selectedNode.data?.type === 'selectivity-scoring' ? (
