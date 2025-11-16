@@ -107,6 +107,8 @@ export default function JobResultsPage() {
   const [isLoadingYaml, setIsLoadingYaml] = useState(false)
   const [yamlError, setYamlError] = useState<string | null>(null)
   const [topRankSummary, setTopRankSummary] = useState<Record<string, string> | null>(null)
+  const [dualMergedRows, setDualMergedRows] = useState<Array<{ design_id: string; iptm: string; design_to_target_iptm: string; final_rank: string }>>([])
+  const [isLoadingDualMerge, setIsLoadingDualMerge] = useState(false)
 
   const fetchJobResults = useCallback(async () => {
     if (!jobId) return
@@ -284,6 +286,56 @@ export default function JobResultsPage() {
     loadTopRank()
   }, [results])
 
+  // For DUAL_TARGET mode: merge prediction_summary.csv and final_designs_metrics_*.csv into table rows
+  useEffect(() => {
+    const loadDualMerge = async () => {
+      try {
+        setDualMergedRows([])
+        if (!results || results.job?.operating_mode !== 'DUAL_TARGET') return
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const pred = results.files.find(f => /prediction_summary\.csv$/i.test(f.name))
+        const metrics = results.files.find(f => /^final_designs_metrics_.*\.csv$/i.test(f.name))
+        if (!pred || !metrics) return
+        setIsLoadingDualMerge(true)
+        // Fetch both CSVs
+        const [predRes, metricsRes] = await Promise.all([
+          fetch(`${apiUrl}${pred.url}`, { credentials: 'include' }),
+          fetch(`${apiUrl}${metrics.url}`, { credentials: 'include' }),
+        ])
+        if (!predRes.ok || !metricsRes.ok) {
+          throw new Error('Failed to fetch required CSV files')
+        }
+        const [predText, metricsText] = await Promise.all([predRes.text(), metricsRes.text()])
+        const predParsed = parseCSV(predText)
+        const metricsParsed = parseCSV(metricsText)
+        // Build map id -> { design_to_target_iptm, final_rank } from metrics
+        const metricsMap = new Map<string, { design_to_target_iptm: string; final_rank: string }>()
+        metricsParsed.rows.forEach((row: any) => {
+          const id = String(row['id'] ?? '').trim()
+          const dtt = String(row['design_to_target_iptm'] ?? '').trim()
+          const fr = String(row['final_rank'] ?? '').trim()
+          if (id) metricsMap.set(id, { design_to_target_iptm: dtt, final_rank: fr })
+        })
+        // Build merged rows by matching prediction_summary.design_id to metrics.id
+        const merged: Array<{ design_id: string; iptm: string; design_to_target_iptm: string; final_rank: string }> = []
+        predParsed.rows.forEach((row: any) => {
+          const designId = String(row['design_id'] ?? '').trim()
+          const iptm = String(row['iptm'] ?? '').trim()
+          if (!designId) return
+          const m = metricsMap.get(designId)
+          merged.push({ design_id: designId, iptm, design_to_target_iptm: m?.design_to_target_iptm ?? '', final_rank: m?.final_rank ?? '' })
+        })
+        setDualMergedRows(merged)
+      } catch (e) {
+        // Non-fatal; leave table empty
+        setDualMergedRows([])
+      } finally {
+        setIsLoadingDualMerge(false)
+      }
+    }
+    loadDualMerge()
+  }, [results])
+
   const fetchYamlData = async (fileUrl: string) => {
     setIsLoadingYaml(true)
     setYamlError(null)
@@ -399,46 +451,98 @@ export default function JobResultsPage() {
           const rank1 = results.files.find(f => /^rank0*1_.*\.cif$/i.test(f.name))
           if (!rank1) return null
           return (
-            <div className="mt-4 flex gap-4">
-              {/* 80% viewer */}
-              <div className="w-4/5 h-[640px] border rounded-lg overflow-hidden">
-                <iframe
-                  src={getCifViewerUrl(rank1.url)}
-                  className="w-full h-full border-0 rounded-lg"
-                  title="Rank 1 Design Viewer"
-                  allowFullScreen
-                />
-              </div>
-              {/* 20% summary list */}
-              <div className="w-1/5 h-[640px] border rounded-lg p-0">
-                <div className="px-3 py-2 border-b">
-                  <h3 className="text-base font-semibold">Rank 1 Metrics</h3>
-                </div>
-                <ScrollArea className="h-[600px]">
-                  {topRankSummary ? (
-                    <div className="divide-y">
-                      <div className="flex items-center justify-between px-3 py-3">
-                        <div className="text-sm font-semibold text-foreground pr-2">design_to_target_iptm</div>
-                        <div className="text-sm text-right">{topRankSummary.design_to_target_iptm}</div>
-                      </div>
-                      <div className="flex items-center justify-between px-3 py-3">
-                        <div className="text-sm font-semibold text-foreground pr-2">design_ptm</div>
-                        <div className="text-sm text-right">{topRankSummary.design_ptm}</div>
-                      </div>
-                      <div className="flex items-center justify-between px-3 py-3">
-                        <div className="text-sm font-semibold text-foreground pr-2">target_ptm</div>
-                        <div className="text-sm text-right">{topRankSummary.target_ptm}</div>
-                      </div>
-                      <div className="flex items-center justify-between px-3 py-3">
-                        <div className="text-sm font-semibold text-foreground pr-2">quality_score</div>
-                        <div className="text-sm text-right">{topRankSummary.quality_score}</div>
-                      </div>
-                      <div className="h-6" />
+            <div className="mt-4">
+              {/* DUAL_TARGET merged table shown above the Mol* embed, respecting layout */}
+              {results.job?.operating_mode === 'DUAL_TARGET' && (
+                <div className="mb-4">
+                  <div className="border rounded-lg bg-background shadow-sm overflow-hidden">
+                    <div className="px-3 py-2 border-b">
+                      <h3 className="text-base font-semibold">PPI Rankings (FCGR3)</h3>
+                      <p className="text-sm text-muted-foreground">
+                        The table below shows the rankings of the designs against the FCGR3 target.
+                      </p>
                     </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground px-3 py-3">No summary available.</p>
-                  )}
-                </ScrollArea>
+                    <div className="max-h-[280px] overflow-auto">
+                      <Table className="table-fixed">
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead style={{ width: 240 }}>design_id</TableHead>
+                            <TableHead style={{ width: 160 }}>iptm (from Boltz-2 PPI rank)</TableHead>
+                            <TableHead style={{ width: 220 }}>design_to_target_iptm</TableHead>
+                            <TableHead style={{ width: 220 }}>final_rank (from Boltzgen)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {isLoadingDualMerge ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center">
+                                <Loader2 className="h-5 w-5 animate-spin inline-block mr-2 text-muted-foreground" />
+                                Loading rankings...
+                              </TableCell>
+                            </TableRow>
+                          ) : dualMergedRows.length > 0 ? (
+                            dualMergedRows.map((r, idx) => (
+                              <TableRow key={idx} className="border-b border-muted-foreground/10">
+                                <TableCell className="truncate font-mono text-xs">{r.design_id}</TableCell>
+                                <TableCell className="truncate text-xs">{r.iptm}</TableCell>
+                                <TableCell className="truncate text-xs">{r.design_to_target_iptm}</TableCell>
+                                <TableCell className="truncate text-xs">{r.final_rank}</TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center text-sm">
+                                No ranking data available
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-4">
+                {/* 80% viewer */}
+                <div className="w-4/5 h-[640px] border rounded-lg overflow-hidden">
+                  <iframe
+                    src={getCifViewerUrl(rank1.url)}
+                    className="w-full h-full border-0 rounded-lg"
+                    title="Rank 1 Design Viewer"
+                    allowFullScreen
+                  />
+                </div>
+                {/* 20% summary list */}
+                <div className="w-1/5 h-[640px] border rounded-lg p-0">
+                  <div className="px-3 py-2 border-b">
+                    <h3 className="text-base font-semibold">Rank 1 Metrics</h3>
+                  </div>
+                  <ScrollArea className="h-[600px]">
+                    {topRankSummary ? (
+                      <div className="divide-y">
+                        <div className="flex items-center justify-between px-3 py-3">
+                          <div className="text-sm font-semibold text-foreground pr-2">design_to_target_iptm</div>
+                          <div className="text-sm text-right">{topRankSummary.design_to_target_iptm}</div>
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-3">
+                          <div className="text-sm font-semibold text-foreground pr-2">design_ptm</div>
+                          <div className="text-sm text-right">{topRankSummary.design_ptm}</div>
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-3">
+                          <div className="text-sm font-semibold text-foreground pr-2">target_ptm</div>
+                          <div className="text-sm text-right">{topRankSummary.target_ptm}</div>
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-3">
+                          <div className="text-sm font-semibold text-foreground pr-2">quality_score</div>
+                          <div className="text-sm text-right">{topRankSummary.quality_score}</div>
+                        </div>
+                        <div className="h-6" />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground px-3 py-3">No summary available.</p>
+                    )}
+                  </ScrollArea>
+                </div>
               </div>
             </div>
           )
