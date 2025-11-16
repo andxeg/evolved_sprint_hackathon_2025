@@ -45,6 +45,7 @@ COPY --chown=user:user ./alembic /app/alembic
 COPY --chown=user:user ./api /app/api
 COPY --chown=user:user ./core /app/core
 COPY --chown=user:user ./binder_optimization /app/binder_optimization
+COPY --chown=user:user ./dual_targets /app/dual_targets
 COPY --chown=user:user ./scripts /app/scripts
 COPY --chown=user:user ./boltzgen /app/boltzgen
 COPY --chown=user:user ./pyproject.toml ./uv.lock ./alembic.ini ./settings.toml ./server.py ./main.py /app/

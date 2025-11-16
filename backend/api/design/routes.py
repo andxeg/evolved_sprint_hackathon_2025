@@ -21,7 +21,9 @@ from sanic_ext import validate
 from sanic_ext.extensions.openapi import openapi
 
 from api.design.models import DesignJob, DesignJobStatus
-from api.design.serializers import DesignInput
+from api.design.serializers import DesignInput, StructureBasedSpecInput
+from dual_targets.get_input_boltzgen import generate_structure_based_binder_spec
+import yaml
 from boltzgen.cli.boltzgen import ARTIFACTS, check_design_spec, get_artifact_path, run_command
 from boltzgen.data.mol import load_canonicals
 from core.config import settings
@@ -144,6 +146,62 @@ class DesignCheckView(HTTPMethodView):
                 message=f"Design check failed: {str(e)}",
             )
 
+
+class StructureBasedBindersSpecView(HTTPMethodView):
+    @openapi.definition(
+        response={
+            200: dict[str, Any],
+            400: ErrorResponse,
+            404: ErrorResponse,
+            500: ErrorResponse,
+        },
+    )
+    @validate(json=StructureBasedSpecInput)
+    async def post(self, request: Request, body: StructureBasedSpecInput) -> Any:
+        """
+        Generate a structure-based binder design spec YAML.
+        
+        Input files must already be uploaded to OUTPUT_DIR/uploads/ and referenced by filename.
+        Request JSON:
+        {
+            "bindersScaffoldCIF": "<filename>",
+            "targetPDB": "<filename>"
+        }
+        """
+        output_dir = Path(settings.OUTPUT_DIR)
+        uploads_folder = output_dir / "uploads"
+
+        cif_path = uploads_folder / body.bindersScaffoldCIF
+        pdb_path = uploads_folder / body.targetPDB
+
+        if not cif_path.exists():
+            raise SanicException(
+                status_code=HTTPStatus.NOT_FOUND,
+                message=f"bindersScaffoldCIF not found: {body.bindersScaffoldCIF}",
+            )
+        if not pdb_path.exists():
+            raise SanicException(
+                status_code=HTTPStatus.NOT_FOUND,
+                message=f"targetPDB not found: {body.targetPDB}",
+            )
+
+        try:
+            spec_dict = generate_structure_based_binder_spec(cif_path, pdb_path)
+            yaml_text = yaml.dump(spec_dict, default_flow_style=False, sort_keys=False)
+
+            # Return YAML content directly
+            return response.raw(
+                yaml_text.encode("utf-8"),
+                content_type="application/x-yaml",
+                headers={
+                    "Content-Disposition": 'attachment; filename="Fcgr4_binder_design.yaml"'
+                },
+            )
+        except Exception as e:
+            raise SanicException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                message=f"Failed to generate design spec: {str(e)}",
+            )
 
 class DesignFileView(HTTPMethodView):
     @openapi.definition(
@@ -1012,3 +1070,4 @@ design_v1.add_route(DesignResultsView.as_view(), "/design/results/<job_id>")
 design_v1.add_route(DesignFileView.as_view(), "/upload")
 design_v1.add_route(DesignFileServeView.as_view(), "/files/<file_path:path>")
 design_v1.add_route(DesignCreateBinderOptimizationView.as_view(), "/design/create/binder-optimization")
+design_v1.add_route(StructureBasedBindersSpecView.as_view(), "/design/structure-based-binders/spec")
