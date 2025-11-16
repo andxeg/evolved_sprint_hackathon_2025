@@ -303,5 +303,28 @@ async def run_dual_targets_pipeline(job_id: uuid.UUID, fasta_filename: str) -> N
     )
     print(f"[DualTargets] Generated YAMLs at: {out_dir}")
 
+    # After YAMLs are generated, run Boltz-2 PPI predictions and summarize
+    preds_dir = job_dir / "boltz_2_pp_predictions"
+    preds_dir.mkdir(parents=True, exist_ok=True)
+
+    summarize_script_rel = "dual_targets/run_predictions_and_summarize.py"
+    summarize_cmd = [
+        "uv", "run", "python", summarize_script_rel,
+        "--yaml-dir", str(out_dir),
+        "--output-dir", str(preds_dir),
+    ]
+
+    print(f"[DualTargets] Running: {' '.join(summarize_cmd)} (cwd={backend_root})")
+    await loop.run_in_executor(
+        None,
+        lambda: subprocess.run(
+            summarize_cmd,
+            cwd=str(backend_root),
+            check=True,
+            capture_output=False,
+        ),
+    )
+    print(f"[DualTargets] Predictions summary written under: {preds_dir}")
+
 
 

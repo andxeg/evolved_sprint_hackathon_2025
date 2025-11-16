@@ -793,6 +793,17 @@ class DesignResultsView(HTTPMethodView):
                                 "url": f"/v1/files/{'/'.join(relative_path.parts)}",
                             })
             
+            # Additional files for DUAL_TARGET mode
+            if design_job.operating_mode == "DUAL_TARGET":
+                dual_summary = base_job_output_dir / "YAMLs_post_processing_boltz_2_output" / "prediction_summary.csv"
+                if dual_summary.exists():
+                    relative_path = dual_summary.relative_to(output_dir)
+                    files_to_check.append({
+                        "name": dual_summary.name,
+                        "path": str(relative_path),
+                        "url": f"/v1/files/{'/'.join(relative_path.parts)}",
+                    })
+            
             # Convert to dict for response
             job_dict = design_job.to_dict()
             
