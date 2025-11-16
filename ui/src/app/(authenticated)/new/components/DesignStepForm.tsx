@@ -279,10 +279,11 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
       const file = e.target.files?.[0]
       if (!file) return
       
-      if (!file.name.endsWith('.cif')) {
+      const lowerName = file.name.toLowerCase()
+      if (!(lowerName.endsWith('.cif') || lowerName.endsWith('.pdb'))) {
         toast({
           title: "Invalid file type",
-          description: "Please upload a .cif file",
+          description: "Please upload a .cif or .pdb file",
           variant: "destructive",
         })
         if (fileInputRef.current) {
@@ -444,7 +445,7 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
                 <input
                   ref={(el) => fileInputRef.set(el)}
                   type="file"
-                  accept=".cif"
+                  accept=".cif,.pdb"
                   onChange={handleFileUpload}
                   className="hidden"
                   id={`file-upload-${index}`}
@@ -457,7 +458,7 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
                   <span className="text-xs text-muted-foreground">
                     Click to upload or drag and drop
                   </span>
-                  <span className="text-xs text-muted-foreground">.cif files only</span>
+                  <span className="text-xs text-muted-foreground">.cif or .pdb files</span>
                 </Label>
               </div>
             )}
@@ -820,6 +821,7 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
                 onChange={(v) => onYamlChange?.(v)}
                 isLoading={false}
                 error={null}
+                readOnly={true}
               />
             </div>
           </div>

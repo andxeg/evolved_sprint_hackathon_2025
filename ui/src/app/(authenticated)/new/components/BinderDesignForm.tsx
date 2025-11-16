@@ -167,10 +167,10 @@ export function BinderDesignForm({ pipelineName, form, onChange, onUploadFile }:
                 ) : (
                   <label className="h-8 px-2 border rounded text-xs inline-flex items-center gap-1 cursor-pointer">
                     <Upload className="h-3 w-3" />
-                    Upload PDB
+                    Upload PDB/CIF
                     <input
                       type="file"
-                      accept=".pdb"
+                      accept=".pdb,.cif"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
@@ -220,10 +220,10 @@ export function BinderDesignForm({ pipelineName, form, onChange, onUploadFile }:
                 ) : (
                   <label className="h-8 px-2 border rounded text-xs inline-flex items-center gap-1 cursor-pointer">
                     <Upload className="h-3 w-3" />
-                    Upload PDB
+                    Upload PDB/CIF
                     <input
                       type="file"
-                      accept=".pdb"
+                      accept=".pdb,.cif"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
@@ -262,10 +262,10 @@ export function BinderDesignForm({ pipelineName, form, onChange, onUploadFile }:
             ) : (
               <label className="h-8 px-2 border rounded text-xs inline-flex items-center gap-1 cursor-pointer">
                 <Upload className="h-3 w-3" />
-                Upload PDB
+                Upload PDB/CIF
                 <input
                   type="file"
-                  accept=".pdb"
+                  accept=".pdb,.cif"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0]

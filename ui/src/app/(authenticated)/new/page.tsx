@@ -95,6 +95,8 @@ export default function PipelineEditorPage() {
   const [isValidatingDesign, setIsValidatingDesign] = useState(false)
   const [isStartingWorkflow, setIsStartingWorkflow] = useState(false)
   const [isLoadingBinderExample, setIsLoadingBinderExample] = useState(false)
+  const [showYamlConfirm, setShowYamlConfirm] = useState(false)
+  const [yamlForSubmit, setYamlForSubmit] = useState<string>('')
 
   // CIF viewer modal state
   const [showCifViewer, setShowCifViewer] = useState(false)
@@ -627,14 +629,14 @@ export default function PipelineEditorPage() {
   }
 
   // Build payload function (shared between validate and start)
-  const buildPayload = async () => {
+  const buildPayload = async (yamlOverride?: string) => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     
     // Generate a unique ID for this workflow run
     const workflowId = pipelineId || `workflow-${Date.now()}`
     
     // Step 1: Upload YAML content as a file
-    const yamlContent = vhhConfigYaml || entitiesToYaml(entities)
+    const yamlContent = yamlOverride ?? (vhhConfigYaml || entitiesToYaml(entities))
     const yamlBlob = new Blob([yamlContent], { type: 'text/yaml' })
     const yamlFile = new File([yamlBlob], `${workflowId}_input.yaml`, { type: 'text/yaml' })
     
@@ -773,24 +775,20 @@ export default function PipelineEditorPage() {
         return
       }
     }
+    // Open YAML confirmation modal with current final YAML
+    const finalYaml = vhhConfigYaml || entitiesToYaml(entities)
+    setYamlForSubmit(finalYaml)
+    setShowYamlConfirm(true)
+  }
+
+  const handleConfirmStartWithYaml = async () => {
     console.log('Starting workflow...')
     setIsStartingWorkflow(true)
-    
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-      
-      // Use stored payload if available, otherwise build a new one
-      let payload = validationPayload
-      
-      if (!payload) {
-        // If no stored payload, build a new one (this shouldn't happen if validate was called first)
-        payload = await buildPayload()
-        setValidationPayload(payload)
-      }
-      
-      console.log('Start workflow payload:', payload)
-      
-      // Post payload to endpoint based on operating mode
+      // Always build payload using the YAML from the modal
+      const payload = await buildPayload(yamlForSubmit)
+      setValidationPayload(payload)
       const createPath = operatingMode === 'binder-optimization'
         ? '/v1/design/create/binder-optimization'
         : '/v1/design/create'
@@ -801,21 +799,19 @@ export default function PipelineEditorPage() {
         },
         body: JSON.stringify(payload),
       })
-      
       if (!designResponse.ok) {
         const errorText = await designResponse.text()
         throw new Error(`Workflow start failed: ${designResponse.statusText} - ${errorText}`)
       }
-      
       const designData = await designResponse.json()
       console.log('Workflow started:', designData)
-      
       toast({
         title: "Workflow started",
         description: "Workflow has been started successfully!",
       })
-      
-      // Redirect to jobs page on success
+      setShowYamlConfirm(false)
+      // Keep local vhhConfigYaml in sync with submitted YAML
+      setVhhConfigYaml(yamlForSubmit)
       router.push('/jobs')
     } catch (error) {
       console.error('Error starting workflow:', error)
@@ -1211,6 +1207,7 @@ export default function PipelineEditorPage() {
                             onChange={() => {}}
                             isLoading={false}
                             error={null}
+                            readOnly={true}
                           />
                         </div>
                       </TabsContent>
@@ -1261,8 +1258,11 @@ export default function PipelineEditorPage() {
                         )}
                       </div>
                     </>
-                  ) : selectedNode.data?.type === 'selectivity-scoring' ? (
+                  ) : selectedNode.data?.label === 'Boltz-2' ? (
                     <div className="space-y-3">
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Keep N out of M top-candidates, run N * K off-target predictions
+                      </p>
                       <div>
                         <label className="text-xs">Top N candidates</label>
                         <Input
@@ -1271,6 +1271,9 @@ export default function PipelineEditorPage() {
                           className="h-8 text-xs w-32 mt-1"
                         />
                       </div>
+                    </div>
+                  ) : selectedNode.data?.type === 'selectivity-scoring' ? (
+                    <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <input
                           id="multiObjective"
@@ -1646,6 +1649,47 @@ export default function PipelineEditorPage() {
                 allowFullScreen
               />
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* YAML Confirmation Modal */}
+      <Dialog open={showYamlConfirm} onOpenChange={setShowYamlConfirm}>
+        <DialogContent className="max-w-[95vw] !max-w-[95vw] w-[95vw] h-[90vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
+            <DialogTitle>Review and Edit Final YAML</DialogTitle>
+            <DialogDescription>
+              Make any final adjustments to the YAML before starting the workflow.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 px-6 pb-4 min-h-0 overflow-hidden">
+            <div className="h-full">
+              <YamlEditor
+                value={yamlForSubmit}
+                onChange={setYamlForSubmit}
+                isLoading={false}
+                error={null}
+                readOnly={false}
+              />
+            </div>
+          </div>
+          <div className="px-6 pb-6 flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowYamlConfirm(false)}
+              disabled={isStartingWorkflow}
+            >
+              Back
+            </Button>
+            <Button onClick={handleConfirmStartWithYaml} disabled={isStartingWorkflow}>
+              {isStartingWorkflow ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                'Confirm & Start'
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -29,9 +29,19 @@
       }
     },
     {
+      "id": "3",
+      "type": "model",
+      "position": { "x": 540, "y": 150 },
+      "data": {
+        "label": "Boltz-2",
+        "type": "model",
+        "description": "Keep N out of M top-candidates, run N * K off-target predictions"
+      }
+    },
+    {
       "id": "4",
       "type": "process",
-      "position": { "x": 660, "y": 150 },
+      "position": { "x": 780, "y": 150 },
       "data": {
         "label": "Selectivity Scoring",
         "type": "selectivity-scoring",
@@ -58,8 +68,15 @@
       "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
     },
     {
-      "id": "e2-4",
+      "id": "e2-3",
       "source": "2",
+      "target": "3",
+      "animated": true,
+      "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
+    },
+    {
+      "id": "e3-4",
+      "source": "3",
       "target": "4",
       "animated": true,
       "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
