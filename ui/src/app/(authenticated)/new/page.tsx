@@ -19,7 +19,9 @@ import {
   ChevronDown,
   Settings2,
   X,
-  Loader2} from 'lucide-react'
+  Loader2,
+  Upload,
+  CheckCircle2} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
@@ -27,6 +29,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -53,7 +56,7 @@ export default function PipelineEditorPage() {
   const [pipelineData, setPipelineData] = useState<any>(null)
   const [activeTab, setActiveTab] = useState('overview')
   const [showJobConfig, setShowJobConfig] = useState(true)
-  const [operatingMode, setOperatingMode] = useState<'standard' | 'binder-optimization'>('standard')
+  const [operatingMode, setOperatingMode] = useState<'standard' | 'binder-optimization' | 'dual-target'>('standard')
   
   // Job configuration state
   const [pipelineName, setPipelineName] = useState('')
@@ -97,6 +100,13 @@ export default function PipelineEditorPage() {
   const [isLoadingBinderExample, setIsLoadingBinderExample] = useState(false)
   const [showYamlConfirm, setShowYamlConfirm] = useState(false)
   const [yamlForSubmit, setYamlForSubmit] = useState<string>('')
+  const [dualForm, setDualForm] = useState<{ bindersScaffoldCIF?: string; targetPdb?: string }>({})
+  const dualCifInputRef = useRef<HTMLInputElement | null>(null)
+  const dualPdbInputRef = useRef<HTMLInputElement | null>(null)
+  const [isLoadingDualExample, setIsLoadingDualExample] = useState(false)
+  const [isGeneratingDualSpec, setIsGeneratingDualSpec] = useState(false)
+  const [dualSpecYaml, setDualSpecYaml] = useState<string | null>(null)
+  const [showDualSpecModal, setShowDualSpecModal] = useState(false)
 
   // CIF viewer modal state
   const [showCifViewer, setShowCifViewer] = useState(false)
@@ -271,6 +281,80 @@ export default function PipelineEditorPage() {
       })
     } finally {
       setIsLoadingBinderExample(false)
+    }
+  }
+
+  const handleLoadDualExample = async () => {
+    try {
+      setIsLoadingDualExample(true)
+      const fetchAsFile = async (publicPath: string, filename: string, mime: string) => {
+        const res = await fetch(publicPath)
+        if (!res.ok) throw new Error(`Failed to fetch ${publicPath}`)
+        const blob = await res.blob()
+        return new File([blob], filename, { type: mime })
+      }
+      const cifPublic = '/examples/dual_target/3AY4.cif'
+      const pdbPublic = '/examples/dual_target/fc4_model_0.pdb'
+      const cifFile = await fetchAsFile(cifPublic, '3AY4.cif', 'chemical/x-cif')
+      const pdbFile = await fetchAsFile(pdbPublic, 'fc4_model_0.pdb', 'chemical/x-pdb')
+      const uploadedCif = await uploadFileToApi(cifFile)
+      const uploadedPdb = await uploadFileToApi(pdbFile)
+      setDualForm(prev => ({ ...prev, bindersScaffoldCIF: uploadedCif, targetPdb: uploadedPdb }))
+      toast({
+        title: 'Example loaded',
+        description: 'Dual target example files uploaded successfully.',
+      })
+    } catch (err) {
+      console.error('Failed to load dual target example', err)
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoadingDualExample(false)
+    }
+  }
+
+  const handleGenerateDualSpec = async () => {
+    try {
+      if (!dualForm.bindersScaffoldCIF || !dualForm.targetPdb) return
+      toast({
+        title: 'time estimation: 12s',
+      })
+      setIsGeneratingDualSpec(true)
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const payload = {
+        bindersScaffoldCIF: dualForm.bindersScaffoldCIF,
+        targetPDB: dualForm.targetPdb,
+      }
+      const res = await fetch(`${apiUrl}/v1/design/structure-based-binders/spec`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`${res.status} ${res.statusText} - ${errorText}`)
+      }
+      const yamlText = await res.text()
+      setDualSpecYaml(yamlText)
+      setShowDualSpecModal(true)
+      toast({
+        title: 'Design spec generated',
+        description: 'YAML design spec is ready to inspect.',
+      })
+    } catch (err) {
+      console.error('Failed to generate dual design spec', err)
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsGeneratingDualSpec(false)
     }
   }
 
@@ -664,7 +748,13 @@ export default function PipelineEditorPage() {
       pipelineName: pipelineName || generatePipelineName(),
     }
     // Append operating mode for backend awareness
-    payload.operatingMode = operatingMode === 'binder-optimization' ? 'BINDER_OPTIMIZATION' : 'STANDARD_BOLTZGEN'
+    if (operatingMode === 'binder-optimization') {
+      payload.operatingMode = 'BINDER_OPTIMIZATION'
+    } else if (operatingMode === 'dual-target') {
+      payload.operatingMode = 'DUAL_TARGET'
+    } else {
+      payload.operatingMode = 'STANDARD_BOLTZGEN'
+    }
 
     // Check if any file entity has an uploaded CIF file
     const fileEntity = entities.find(e => e.type === 'file' && (e.uploadedFilename || e.path))
@@ -759,6 +849,20 @@ export default function PipelineEditorPage() {
         }
         return
       }
+    } else if (operatingMode === 'dual-target') {
+      // Dual Target: require generated spec instead of entities/form
+      if (!dualSpecYaml) {
+        toast({
+          title: "Generate spec first",
+          description: "Please generate the design spec in \"Generate Binders Spec\" before starting the workflow.",
+          variant: "destructive",
+        })
+        const specNode = nodes.find(n => (n as any)?.data?.type === 'generate-binders-spec')
+        if (specNode) {
+          setSelectedNode(specNode as any)
+        }
+        return
+      }
     } else {
       // Require at least one entity in the Design specification form
       if (entities.length === 0) {
@@ -775,10 +879,25 @@ export default function PipelineEditorPage() {
         return
       }
     }
-    // Open YAML confirmation modal with current final YAML
-    const finalYaml = vhhConfigYaml || entitiesToYaml(entities)
-    setYamlForSubmit(finalYaml)
-    setShowYamlConfirm(true)
+    // Open YAML confirmation modal with appropriate YAML per operating mode
+    if (operatingMode === 'dual-target') {
+      if (!dualSpecYaml) {
+        toast({
+          title: 'Generate spec first',
+          description: 'Please generate the design spec in "Generate Binders Spec" before starting the workflow.',
+          variant: 'destructive',
+        })
+        const specNode = nodes.find(n => (n as any)?.data?.type === 'generate-binders-spec')
+        if (specNode) setSelectedNode(specNode as any)
+        return
+      }
+      setYamlForSubmit(dualSpecYaml)
+      setShowYamlConfirm(true)
+    } else {
+      const finalYaml = vhhConfigYaml || entitiesToYaml(entities)
+      setYamlForSubmit(finalYaml)
+      setShowYamlConfirm(true)
+    }
   }
 
   const handleConfirmStartWithYaml = async () => {
@@ -1212,6 +1331,188 @@ export default function PipelineEditorPage() {
                         </div>
                       </TabsContent>
                     </Tabs>
+                  ) : selectedNode.data?.type === 'generate-binders-spec' ? (
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium text-xs text-gray-600 dark:text-gray-400 mb-1">
+                          Generate Binders Spec
+                        </h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Upload binder scaffold CIF (chains A,B, reference chain C) and primary target PDB (aligned to chain A).
+                        </p>
+                        <div className="mt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleLoadDualExample}
+                            disabled={isLoadingDualExample}
+                            className="h-7 text-xs"
+                          >
+                            {isLoadingDualExample ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                Loading...
+                              </>
+                            ) : (
+                              'Load Example'
+                            )}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="default"
+                            size="sm"
+                            onClick={handleGenerateDualSpec}
+                            disabled={
+                              isGeneratingDualSpec ||
+                              !dualForm.bindersScaffoldCIF ||
+                              !dualForm.targetPdb
+                            }
+                            className="h-7 text-xs ml-2"
+                          >
+                            {isGeneratingDualSpec ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                Generating...
+                              </>
+                            ) : (
+                              'Generate design spec'
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs">Binder Scaffold CIF:</Label>
+                          <div className="mt-2">
+                            {dualForm.bindersScaffoldCIF ? (
+                              <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                <span className="text-xs font-mono flex-1">
+                                  {dualForm.bindersScaffoldCIF}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setDualForm(prev => ({ ...prev, bindersScaffoldCIF: undefined }))
+                                    if (dualCifInputRef.current) dualCifInputRef.current.value = ''
+                                  }}
+                                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="border-2 border-dashed rounded-md p-4 text-center">
+                                <input
+                                  ref={dualCifInputRef}
+                                  type="file"
+                                  accept=".cif"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0]
+                                    if (!file) return
+                                    try {
+                                      const uploaded = await uploadFileToApi(file)
+                                      setDualForm(prev => ({ ...prev, bindersScaffoldCIF: uploaded }))
+                                      toast({ title: 'Uploaded', description: uploaded })
+                                    } catch (err) {
+                                      toast({ title: 'Upload failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
+                                    } finally {
+                                      if (dualCifInputRef.current) dualCifInputRef.current.value = ''
+                                    }
+                                  }}
+                                  className="hidden"
+                                  id={`dual-cif-upload`}
+                                />
+                                <Label
+                                  htmlFor={`dual-cif-upload`}
+                                  className="cursor-pointer flex flex-col items-center gap-2"
+                                >
+                                  <Upload className="h-6 w-6 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">
+                                    Click to upload or drag and drop
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">.cif files</span>
+                                </Label>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs">Target PDB:</Label>
+                          <div className="mt-2">
+                            {dualForm.targetPdb ? (
+                              <div className="flex items-center gap-2 p-2 border rounded-md bg-muted/50">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                <span className="text-xs font-mono flex-1">
+                                  {dualForm.targetPdb}
+                                </span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setDualForm(prev => ({ ...prev, targetPdb: undefined }))
+                                    if (dualPdbInputRef.current) dualPdbInputRef.current.value = ''
+                                  }}
+                                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="border-2 border-dashed rounded-md p-4 text-center">
+                                <input
+                                  ref={dualPdbInputRef}
+                                  type="file"
+                                  accept=".pdb"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0]
+                                    if (!file) return
+                                    try {
+                                      const uploaded = await uploadFileToApi(file)
+                                      setDualForm(prev => ({ ...prev, targetPdb: uploaded }))
+                                      toast({ title: 'Uploaded', description: uploaded })
+                                    } catch (err) {
+                                      toast({ title: 'Upload failed', description: err instanceof Error ? err.message : 'Unknown error', variant: 'destructive' })
+                                    } finally {
+                                      if (dualPdbInputRef.current) dualPdbInputRef.current.value = ''
+                                    }
+                                  }}
+                                  className="hidden"
+                                  id={`dual-pdb-upload`}
+                                />
+                                <Label
+                                  htmlFor={`dual-pdb-upload`}
+                                  className="cursor-pointer flex flex-col items-center gap-2"
+                                >
+                                  <Upload className="h-6 w-6 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">
+                                    Click to upload or drag and drop
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">.pdb files</span>
+                                </Label>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {dualSpecYaml && (
+                        <div className="pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowDualSpecModal(true)}
+                            className="h-7 text-xs"
+                          >
+                            Inspect design
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   ) : selectedNode.type === 'pipeline' && selectedNode.data?.pipelineType === 'boltzgen' ? (
                     <>
                       {/* Workflow Config Form */}
@@ -1611,6 +1912,7 @@ export default function PipelineEditorPage() {
             <SelectContent>
               <SelectItem value="standard">Standard Boltzgen</SelectItem>
               <SelectItem value="binder-optimization">Binder Optimization</SelectItem>
+              <SelectItem value="dual-target">Dual target: Existing + Unknown</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -1689,6 +1991,36 @@ export default function PipelineEditorPage() {
               ) : (
                 'Confirm & Start'
               )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Dual Target - Generated Design Spec Modal */}
+      <Dialog open={showDualSpecModal} onOpenChange={setShowDualSpecModal}>
+        <DialogContent className="max-w-[95vw] !max-w-[95vw] w-[95vw] h-[90vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
+            <DialogTitle>Generated Design Spec (YAML)</DialogTitle>
+            <DialogDescription>
+              Review the generated design specification.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 px-6 pb-4 min-h-0 overflow-hidden">
+            <div className="h-full">
+              <YamlEditor
+                value={dualSpecYaml || ''}
+                onChange={() => {}}
+                isLoading={false}
+                error={null}
+                readOnly={true}
+              />
+            </div>
+          </div>
+          <div className="px-6 pb-6 flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowDualSpecModal(false)}
+            >
+              Close
             </Button>
           </div>
         </DialogContent>
