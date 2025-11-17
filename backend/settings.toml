@@ -1,0 +1,48 @@
+[global]
+# Application Settings
+PROJECT_NAME = "Evolved Hackathon API"
+HOST_API = "http://localhost:8000"
+
+LOCAL_OUTPUT_PATH = "/home/nebius/julio/runs"
+DOCKER_OUTPUT_PATH = "/app/tmp/output/results"
+
+CORS_ORIGINS = "http://localhost:3000,https://evolved.fastfold.ai,http://localhost:5173,https://nano-protein-viewer-react.juliocesar.io"
+
+
+[local]
+# Environment Settings
+ENVIRONMENT = "local"
+DEV_ENVIRONMENT = "local"
+
+# Database Settings
+POSTGRES_SERVER = "localhost"
+POSTGRES_PORT = 5432
+POSTGRES_DB = "evolved-hackathon"
+POSTGRES_USER = "postgres"
+POSTGRES_PASSWORD = "donothackmeplease"
+POSTGRES_SSL_MODE = "disable"
+
+
+# Redis and Celery Settings
+REDIS_HOST = "localhost"
+REDIS_PORT = 6379
+
+[docker]
+# Environment Settings
+ENVIRONMENT = "docker"
+DEV_ENVIRONMENT = "dev"
+
+
+
+# Database Settings
+POSTGRES_SERVER = "db"
+POSTGRES_PORT = 5432
+POSTGRES_DB = "evolved-hackathon"
+POSTGRES_USER = "postgres"
+POSTGRES_PASSWORD = "donothackmeplease"
+POSTGRES_SSL_MODE = "disable"
+
+
+# Redis and Celery Settings
+REDIS_HOST = "redis"
+REDIS_PORT = 6379

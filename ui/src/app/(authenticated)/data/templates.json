@@ -1,0 +1,65 @@
+[
+  {
+    "id": "boltzgen",
+    "title": "Boltzgen ++",
+    "description": "Optimized Boltzgen pipeline with negative/off-targets and scaffold",
+    "icon": "Dna",
+    "status": "active",
+    "phases": 5,
+    "workflowSteps": [
+      {
+        "step": 1,
+        "title": "Input",
+        "description": "Target protein + negative/off-targets + scaffold"
+      },
+      {
+        "step": 2,
+        "title": "Generate",
+        "description": "Candidate sequences (BoltzGen)"
+      },
+      {
+        "step": 3,
+        "title": "Score",
+        "description": "Affinity (target), Selectivity (negative targets), Property predictions (solubility, stability, etc.). Optionally use multi-objective ranking (Pareto front of affinity vs selectivity vs solubility)"
+      },
+      {
+        "step": 4,
+        "title": "Filter",
+        "description": "Rank and keep the best candidates. After this step, you may re-generate (return to step 2) variants for further improvement"
+      },
+      {
+        "step": 5,
+        "title": "Output",
+        "description": "Optimized binders"
+      }
+    ],
+    "features": [
+      "AlphaFold2 Backpropagation Design",
+      "VHH Framework Templating",
+      "ESM2 Sequence Priors"
+    ],
+    "models": [
+      {
+        "name": "AlphaFold-Multimer",
+        "catalogUrl": "https://fastfold.ai/models/alphafold-multimer"
+      },
+      {
+        "name": "ESM2",
+        "catalogUrl": "https://fastfold.ai/models/esm2"
+      },
+      {
+        "name": "NanoBodyBuilder2",
+        "catalogUrl": "https://fastfold.ai/models/nanobody-builder2"
+      }
+    ],
+    "stats": {
+      "totalDesigns": "1,153,241",
+      "targets": "436",
+      "experimentalSuccess": "45%",
+      "maxHitRate": "38%",
+      "validatedTargets": "145"
+    },
+    "url": "/new",
+    "color": ""
+  }
+]
