@@ -164,6 +164,7 @@ export function ParametersTab({
             onReset={handleReset}
             isLoading={false}
             error={null}
+            readOnly={true}
           />
         </div>
 

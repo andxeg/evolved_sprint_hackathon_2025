@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Plus, Trash2, ChevronDown, ChevronUp, Upload, X, CheckCircle2, Loader2 } from 'lucide-react'
 import React, { useState, useRef } from 'react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { YamlEditor } from './YamlEditor'
 import { useToast } from '@/hooks/use-toast'
 
 export interface Entity {
@@ -39,9 +41,17 @@ interface DesignStepFormProps {
   onLoadExample?: () => void
   isLoadingExample?: boolean
   isValidatingDesign?: boolean
+  // Optional YAML editor props (shown in internal tab)
+  yamlValue?: string
+  onYamlChange?: (value: string) => void
+  onYamlSave?: () => void
+  onYamlReset?: () => void
+  yamlHasChanges?: boolean
+  yamlSaveMessage?: string | null
+  isYamlResetting?: boolean
 }
 
-export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadExample, isLoadingExample = false, isValidatingDesign = false }: DesignStepFormProps) {
+export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadExample, isLoadingExample = false, isValidatingDesign = false, yamlValue = '', onYamlChange, onYamlSave, onYamlReset, yamlHasChanges, yamlSaveMessage, isYamlResetting = false }: DesignStepFormProps) {
   const { toast } = useToast()
   const [expandedEntity, setExpandedEntity] = useState<number | null>(null)
   const [selectedEntityType, setSelectedEntityType] = useState<'protein' | 'ligand' | 'file' | ''>('')
@@ -269,10 +279,11 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
       const file = e.target.files?.[0]
       if (!file) return
       
-      if (!file.name.endsWith('.cif')) {
+      const lowerName = file.name.toLowerCase()
+      if (!(lowerName.endsWith('.cif') || lowerName.endsWith('.pdb'))) {
         toast({
           title: "Invalid file type",
-          description: "Please upload a .cif file",
+          description: "Please upload a .cif or .pdb file",
           variant: "destructive",
         })
         if (fileInputRef.current) {
@@ -434,7 +445,7 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
                 <input
                   ref={(el) => fileInputRef.set(el)}
                   type="file"
-                  accept=".cif"
+                  accept=".cif,.pdb"
                   onChange={handleFileUpload}
                   className="hidden"
                   id={`file-upload-${index}`}
@@ -447,7 +458,7 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
                   <span className="text-xs text-muted-foreground">
                     Click to upload or drag and drop
                   </span>
-                  <span className="text-xs text-muted-foreground">.cif files only</span>
+                  <span className="text-xs text-muted-foreground">.cif or .pdb files</span>
                 </Label>
               </div>
             )}
@@ -624,164 +635,198 @@ export function DesignStepForm({ entities, onEntitiesChange, onValidate, onLoadE
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header - Fixed */}
-      <div className="flex items-center justify-between mb-3 flex-shrink-0">
-        <div>
-          <h4 className="font-medium text-sm">Entities</h4>
-          <p className="text-xs text-muted-foreground">
-            Add proteins, ligands, or structure files to your design
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {onLoadExample && (
+      <Tabs defaultValue="form" className="flex flex-col h-full">
+          <div className="flex items-center justify-between mb-3 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-1">
+            <TabsList className="h-8">
+              <TabsTrigger value="form" className="px-3 py-1.5 text-xs">Form</TabsTrigger>
+              <TabsTrigger value="yaml" className="px-3 py-1.5 text-xs">YAML</TabsTrigger>
+            </TabsList>
+          </div>
+          <div className="flex gap-2">
+            <Select 
+              value={selectedEntityType} 
+              onValueChange={(v) => setSelectedEntityType(v as 'protein' | 'ligand' | 'file')}
+            >
+              <SelectTrigger className="h-8 text-xs w-32">
+                <SelectValue placeholder="Entity type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="protein">Protein</SelectItem>
+                <SelectItem value="ligand">Ligand</SelectItem>
+                <SelectItem value="file">File</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               type="button"
-              variant="outline"
+              variant="default"
               size="sm"
-              onClick={onLoadExample}
-              disabled={isLoadingExample}
+              onClick={() => {
+                if (selectedEntityType) {
+                  addEntity(selectedEntityType)
+                  setSelectedEntityType('')
+                }
+              }}
+              disabled={!selectedEntityType || expandedEntity !== null}
               className="h-8 text-xs"
             >
-              {isLoadingExample ? (
-                <>
-                  <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                'Load Example'
-              )}
+              <Plus className="h-3 w-3 mr-1" />
+              Add
             </Button>
-          )}
-          <Select 
-            value={selectedEntityType} 
-            onValueChange={(v) => setSelectedEntityType(v as 'protein' | 'ligand' | 'file')}
-          >
-            <SelectTrigger className="h-8 text-xs w-32">
-              <SelectValue placeholder="Entity type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="protein">Protein</SelectItem>
-              <SelectItem value="ligand">Ligand</SelectItem>
-              <SelectItem value="file">File</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            onClick={() => {
-              if (selectedEntityType) {
-                addEntity(selectedEntityType)
-                setSelectedEntityType('')
-              }
-            }}
-            disabled={!selectedEntityType || expandedEntity !== null}
-            className="h-8 text-xs"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add
-          </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Scrollable Content Area */}
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="space-y-3 pr-4">
-          {entities.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6">
-                <p className="text-xs text-muted-foreground text-center">
-                  No entities added yet. Click "Add..." to get started.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-2">
-              {entities.map((entity, index) => (
-                <Card key={index}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-sm">
-                          {entity.type.charAt(0).toUpperCase() + entity.type.slice(1)} {index + 1}
-                          {entity.id && ` (${entity.id})`}
-                        </CardTitle>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleExpand(index)}
-                          className="h-6 w-6 p-0"
-                        >
-                          {expandedEntity === index ? (
-                            <ChevronUp className="h-3 w-3" />
-                          ) : (
-                            <ChevronDown className="h-3 w-3" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeEntity(index)}
-                          className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  {expandedEntity === index && (
-                    <CardContent className="p-0">
-                      <div className="h-[400px] overflow-y-auto overflow-x-hidden">
-                        <div className="p-6">
-                          {entity.type === 'protein' && renderProteinForm(entity, index)}
-                          {entity.type === 'ligand' && renderLigandForm(entity, index)}
-                          {entity.type === 'file' && renderFileForm(entity, index)}
-                        </div>
-                      </div>
-                    </CardContent>
-                  )}
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Validate Design Button - Only show when entities are added */}
-          {entities.length > 0 && (
-            <div className="pt-4 border-t">
+        <TabsContent value="form" className="flex-1 min-h-0">
+          {onLoadExample && (
+            <div className="mb-2">
               <Button
                 type="button"
-                variant="default"
+                variant="outline"
                 size="sm"
-                onClick={() => {
-                  // Trigger validation by calling onValidate if provided
-                  if (onValidate) {
-                    onValidate()
-                  }
-                }}
-                disabled={isValidatingDesign}
-                className="w-full h-8 text-xs"
+                onClick={onLoadExample}
+                disabled={isLoadingExample}
+                className="h-8 text-xs"
               >
-                {isValidatingDesign ? (
+                {isLoadingExample ? (
                   <>
                     <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                    Validating...
+                    Loading...
                   </>
                 ) : (
-                  <>
-                    <CheckCircle2 className="h-3 w-3 mr-2" />
-                    Validate Design
-                  </>
+                  'Load Example'
                 )}
               </Button>
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                Validates the design and syncs with YAML editor
-              </p>
             </div>
           )}
-        </div>
-      </ScrollArea>
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="space-y-3 pr-4">
+              {entities.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-xs text-muted-foreground text-center">
+                      No entities added yet. Click "Add..." to get started.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-2">
+                  {entities.map((entity, index) => (
+                    <Card key={index}>
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-sm">
+                              {entity.type.charAt(0).toUpperCase() + entity.type.slice(1)} {index + 1}
+                              {entity.id && ` (${entity.id})`}
+                            </CardTitle>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleExpand(index)}
+                              className="h-6 w-6 p-0"
+                            >
+                              {expandedEntity === index ? (
+                                <ChevronUp className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeEntity(index)}
+                              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      {expandedEntity === index && (
+                        <CardContent className="p-0">
+                          <div className="h-[400px] overflow-y-auto overflow-x-hidden">
+                            <div className="p-6">
+                              {entity.type === 'protein' && renderProteinForm(entity, index)}
+                              {entity.type === 'ligand' && renderLigandForm(entity, index)}
+                              {entity.type === 'file' && renderFileForm(entity, index)}
+                            </div>
+                          </div>
+                        </CardContent>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {entities.length > 0 && (
+                <div className="pt-4 border-t">
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={() => {
+                      if (onValidate) {
+                        onValidate()
+                      }
+                    }}
+                    disabled={isValidatingDesign}
+                    className="w-full h-8 text-xs"
+                  >
+                    {isValidatingDesign ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                        Checking...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-3 w-3 mr-2" />
+                        Check design in Mol*
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Validates the design and syncs with YAML editor
+                  </p>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="yaml" className="flex-1 min-h-0">
+          <div className="flex flex-col gap-2 h-[520px]">
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Button variant="outline" size="sm" onClick={onYamlReset} disabled={isYamlResetting} className="h-8 text-xs">
+                {isYamlResetting ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                    Resetting...
+                  </>
+                ) : (
+                  'Reset to defaults'
+                )}
+              </Button>
+              <Button variant="default" size="sm" onClick={onYamlSave} disabled={!yamlHasChanges} className="h-8 text-xs">
+                Save changes
+              </Button>
+              {yamlSaveMessage && (
+                <span className="text-xs text-muted-foreground">{yamlSaveMessage}</span>
+              )}
+            </div>
+            <div className="flex-1 min-h-0">
+              <YamlEditor
+                value={yamlValue || ''}
+                onChange={(v) => onYamlChange?.(v)}
+                isLoading={false}
+                error={null}
+                readOnly={true}
+              />
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

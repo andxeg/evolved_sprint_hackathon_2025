@@ -9,6 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
 import {
   Table,
   TableBody,
@@ -18,11 +20,17 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
-import { ColumnDef, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
+import { ColumnDef, flexRender, getCoreRowModel, useReactTable, type ColumnSizingState, type ColumnSizingInfoState } from '@tanstack/react-table'
 import { FileText, Loader2, ArrowLeft } from 'lucide-react'
 import { useParams, useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 
 // Dynamically import PDF viewer with SSR disabled to avoid DOMMatrix issues
 const PdfViewer = dynamic(
@@ -56,9 +64,25 @@ type DesignResultFile = {
   url: string
 }
 
+type JobDetail = {
+  id: string
+  input_yaml_filename: string
+  budget: number
+  protocol_name: string
+  num_designs: number
+  status: string
+  pipeline_name: string
+  operating_mode?: string
+  run_time_in_seconds?: number
+  parent_design_job_id?: string | null
+  is_child_design_job?: boolean | null
+  created_at: string
+  updated_at: string
+}
+
 type DesignResultsResponse = {
   message: string
-  job_id: string
+  job: JobDetail
   files: DesignResultFile[]
   count: number
 }
@@ -75,10 +99,16 @@ export default function JobResultsPage() {
   const [showFileViewer, setShowFileViewer] = useState(false)
   const [csvData, setCsvData] = useState<any[]>([])
   const [csvColumns, setCsvColumns] = useState<ColumnDef<any>[]>([])
+  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({})
+  const [columnSizingInfo, setColumnSizingInfo] = useState<ColumnSizingInfoState>({} as ColumnSizingInfoState)
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({})
   const [isLoadingCsv, setIsLoadingCsv] = useState(false)
   const [yamlContent, setYamlContent] = useState<string | null>(null)
   const [isLoadingYaml, setIsLoadingYaml] = useState(false)
   const [yamlError, setYamlError] = useState<string | null>(null)
+  const [topRankSummary, setTopRankSummary] = useState<Record<string, string> | null>(null)
+  const [dualMergedRows, setDualMergedRows] = useState<Array<{ design_id: string; iptm: string; design_to_target_iptm: string; final_rank: string }>>([])
+  const [isLoadingDualMerge, setIsLoadingDualMerge] = useState(false)
 
   const fetchJobResults = useCallback(async () => {
     if (!jobId) return
@@ -116,12 +146,13 @@ export default function JobResultsPage() {
     return filename.split('.').pop()?.toLowerCase() || ''
   }
 
-  const getFileType = (filename: string): 'cif' | 'pdf' | 'csv' | 'yaml' | 'other' => {
+  const getFileType = (filename: string): 'cif' | 'pdf' | 'csv' | 'yaml' | 'image' | 'other' => {
     const ext = getFileExtension(filename)
     if (ext === 'cif') return 'cif'
     if (ext === 'pdf') return 'pdf'
     if (ext === 'csv') return 'csv'
     if (ext === 'yaml' || ext === 'yml') return 'yaml'
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'svg'].includes(ext)) return 'image'
     return 'other'
   }
 
@@ -186,6 +217,7 @@ export default function JobResultsPage() {
           id: safeId || `column_${index}`, // Explicit ID for TanStack Table
           accessorKey: header, // Keep original header for data access
           header: header,
+          size: 180, // default width so all columns start uniform
           cell: ({ row }) => {
             // Access data directly from row.original to avoid column ID lookup issues
             const value = row.original[header]
@@ -195,6 +227,14 @@ export default function JobResultsPage() {
       })
       
       setCsvColumns(columns)
+      // Initialize visibility: show first 7 columns by default
+      const visibilityInit: Record<string, boolean> = {}
+      const ids = columns.map(c => (c.id as string) || '')
+      const visibleCount = Math.min(7, ids.length)
+      ids.forEach((id, index) => {
+        if (id) visibilityInit[id] = index < visibleCount
+      })
+      setColumnVisibility(visibilityInit)
       setCsvData(rows)
     } catch (error) {
       console.error('Error fetching CSV:', error)
@@ -209,6 +249,92 @@ export default function JobResultsPage() {
       setIsLoadingCsv(false)
     }
   }
+
+  // Load top-rank summary from final_designs_metrics_2.csv (first row)
+  useEffect(() => {
+    const loadTopRank = async () => {
+      if (!results || !results.files?.length) return
+      // Match any file like final_designs_metrics_*.csv (e.g., final_designs_metrics_2.csv)
+      const csvFile = results.files.find(f => /^final_designs_metrics_.*\.csv$/i.test(f.name))
+      if (!csvFile) {
+        setTopRankSummary(null)
+        return
+      }
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const response = await fetch(`${apiUrl}${csvFile.url}`, { credentials: 'include' })
+        if (!response.ok) throw new Error('Failed to fetch top-rank CSV')
+        const csvText = await response.text()
+        const { headers, rows } = parseCSV(csvText)
+        if (rows.length === 0) {
+          setTopRankSummary(null)
+          return
+        }
+        const first = rows[0] || {}
+        const summary: Record<string, string> = {
+          design_to_target_iptm: String(first['design_to_target_iptm'] ?? ''),
+          design_ptm: String(first['design_ptm'] ?? ''),
+          target_ptm: String(first['target_ptm'] ?? ''),
+          quality_score: String(first['quality_score'] ?? ''),
+        }
+        setTopRankSummary(summary)
+      } catch (e) {
+        // Non-fatal: just skip summary
+        setTopRankSummary(null)
+      }
+    }
+    loadTopRank()
+  }, [results])
+
+  // For DUAL_TARGET mode: merge prediction_summary.csv and final_designs_metrics_*.csv into table rows
+  useEffect(() => {
+    const loadDualMerge = async () => {
+      try {
+        setDualMergedRows([])
+        if (!results || results.job?.operating_mode !== 'DUAL_TARGET') return
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+        const pred = results.files.find(f => /prediction_summary\.csv$/i.test(f.name))
+        const metrics = results.files.find(f => /^final_designs_metrics_.*\.csv$/i.test(f.name))
+        if (!pred || !metrics) return
+        setIsLoadingDualMerge(true)
+        // Fetch both CSVs
+        const [predRes, metricsRes] = await Promise.all([
+          fetch(`${apiUrl}${pred.url}`, { credentials: 'include' }),
+          fetch(`${apiUrl}${metrics.url}`, { credentials: 'include' }),
+        ])
+        if (!predRes.ok || !metricsRes.ok) {
+          throw new Error('Failed to fetch required CSV files')
+        }
+        const [predText, metricsText] = await Promise.all([predRes.text(), metricsRes.text()])
+        const predParsed = parseCSV(predText)
+        const metricsParsed = parseCSV(metricsText)
+        // Build map id -> { design_to_target_iptm, final_rank } from metrics
+        const metricsMap = new Map<string, { design_to_target_iptm: string; final_rank: string }>()
+        metricsParsed.rows.forEach((row: any) => {
+          const id = String(row['id'] ?? '').trim()
+          const dtt = String(row['design_to_target_iptm'] ?? '').trim()
+          const fr = String(row['final_rank'] ?? '').trim()
+          if (id) metricsMap.set(id, { design_to_target_iptm: dtt, final_rank: fr })
+        })
+        // Build merged rows by matching prediction_summary.design_id to metrics.id
+        const merged: Array<{ design_id: string; iptm: string; design_to_target_iptm: string; final_rank: string }> = []
+        predParsed.rows.forEach((row: any) => {
+          const designId = String(row['design_id'] ?? '').trim()
+          const iptm = String(row['iptm'] ?? '').trim()
+          if (!designId) return
+          const m = metricsMap.get(designId)
+          merged.push({ design_id: designId, iptm, design_to_target_iptm: m?.design_to_target_iptm ?? '', final_rank: m?.final_rank ?? '' })
+        })
+        setDualMergedRows(merged)
+      } catch (e) {
+        // Non-fatal; leave table empty
+        setDualMergedRows([])
+      } finally {
+        setIsLoadingDualMerge(false)
+      }
+    }
+    loadDualMerge()
+  }, [results])
 
   const fetchYamlData = async (fileUrl: string) => {
     setIsLoadingYaml(true)
@@ -267,7 +393,7 @@ export default function JobResultsPage() {
   const getCifViewerUrl = (fileUrl: string): string => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     const fullUrl = `${apiUrl}${fileUrl}`
-    return `https://nano-protein-viewer-react.juliocesar.io/?from=remote_url&url=${encodeURIComponent(fullUrl)}`
+    return `https://nano-protein-viewer-react.juliocesar.io/?from=remote_url&url=${encodeURIComponent(fullUrl)}&color=chain`
   }
 
   // Create table instance for CSV data
@@ -275,6 +401,15 @@ export default function JobResultsPage() {
     data: csvData,
     columns: csvColumns,
     getCoreRowModel: getCoreRowModel(),
+    columnResizeMode: 'onChange',
+    onColumnSizingChange: setColumnSizing,
+    onColumnSizingInfoChange: setColumnSizingInfo,
+    state: {
+      columnSizing,
+      columnSizingInfo,
+      columnVisibility,
+    },
+    onColumnVisibilityChange: setColumnVisibility,
   })
 
   if (isLoading) {
@@ -298,7 +433,8 @@ export default function JobResultsPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <ScrollArea className="h-screen w-full">
+      <div className="container mx-auto p-6 max-w-7xl pb-24">
       {/* Header */}
       <div className="mb-6">
         <Button
@@ -309,14 +445,172 @@ export default function JobResultsPage() {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Jobs
         </Button>
-        <h1 className="text-3xl font-bold">Job Results</h1>
-        <p className="text-muted-foreground mt-2">
-          Job ID: {results.job_id}
-        </p>
-        <p className="text-sm text-muted-foreground mt-1">
-          {results.count} file{results.count !== 1 ? 's' : ''} available
-        </p>
+        <h1 className="text-3xl font-bold">{results.job?.pipeline_name || 'Job Results'}</h1>
+        {/* Embed + Top-rank summary side by side */}
+        {(() => {
+          const rank1 = results.files.find(f => /^rank0*1_.*\.cif$/i.test(f.name))
+          if (!rank1) return null
+          return (
+            <div className="mt-4">
+              {/* DUAL_TARGET merged table shown above the Mol* embed, respecting layout */}
+              {results.job?.operating_mode === 'DUAL_TARGET' && (
+                <div className="mb-4">
+                  <div className="border rounded-lg bg-background shadow-sm overflow-hidden">
+                    <div className="px-3 py-2 border-b">
+                      <h3 className="text-base font-semibold">PPI Rankings (FCGR3)</h3>
+                      <p className="text-sm text-muted-foreground">
+                        The table below shows the rankings of the designs against the FCGR3 target.
+                      </p>
+                    </div>
+                    <div className="max-h-[280px] overflow-auto">
+                      <Table className="table-fixed">
+                        <TableHeader className="sticky top-0 bg-background z-10">
+                          <TableRow>
+                            <TableHead style={{ width: 240 }}>design_id</TableHead>
+                            <TableHead style={{ width: 160 }}>iptm (from Boltz-2 PPI rank)</TableHead>
+                            <TableHead style={{ width: 220 }}>design_to_target_iptm</TableHead>
+                            <TableHead style={{ width: 220 }}>final_rank (from Boltzgen)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {isLoadingDualMerge ? (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center">
+                                <Loader2 className="h-5 w-5 animate-spin inline-block mr-2 text-muted-foreground" />
+                                Loading rankings...
+                              </TableCell>
+                            </TableRow>
+                          ) : dualMergedRows.length > 0 ? (
+                            dualMergedRows.map((r, idx) => (
+                              <TableRow key={idx} className="border-b border-muted-foreground/10">
+                                <TableCell className="truncate font-mono text-xs">{r.design_id}</TableCell>
+                                <TableCell className="truncate text-xs">{r.iptm}</TableCell>
+                                <TableCell className="truncate text-xs">{r.design_to_target_iptm}</TableCell>
+                                <TableCell className="truncate text-xs">{r.final_rank}</TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center text-sm">
+                                No ranking data available
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-4">
+                {/* 80% viewer */}
+                <div className="w-4/5 h-[640px] border rounded-lg overflow-hidden">
+                  <iframe
+                    src={getCifViewerUrl(rank1.url)}
+                    className="w-full h-full border-0 rounded-lg"
+                    title="Rank 1 Design Viewer"
+                    allowFullScreen
+                  />
+                </div>
+                {/* 20% summary list */}
+                <div className="w-1/5 h-[640px] border rounded-lg p-0">
+                  <div className="px-3 py-2 border-b">
+                    <h3 className="text-base font-semibold">Rank 1 Metrics</h3>
+                  </div>
+                  <ScrollArea className="h-[600px]">
+                    {topRankSummary ? (
+                      <div className="divide-y">
+                        <div className="flex items-center justify-between px-3 py-3">
+                          <div className="text-sm font-semibold text-foreground pr-2">design_to_target_iptm</div>
+                          <div className="text-sm text-right">{topRankSummary.design_to_target_iptm}</div>
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-3">
+                          <div className="text-sm font-semibold text-foreground pr-2">design_ptm</div>
+                          <div className="text-sm text-right">{topRankSummary.design_ptm}</div>
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-3">
+                          <div className="text-sm font-semibold text-foreground pr-2">target_ptm</div>
+                          <div className="text-sm text-right">{topRankSummary.target_ptm}</div>
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-3">
+                          <div className="text-sm font-semibold text-foreground pr-2">quality_score</div>
+                          <div className="text-sm text-right">{topRankSummary.quality_score}</div>
+                        </div>
+                        <div className="h-6" />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground px-3 py-3">No summary available.</p>
+                    )}
+                  </ScrollArea>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+        <div className="mt-3">
+          <Table>
+            <TableBody>
+              <TableRow>
+                <TableCell className="font-medium">Status</TableCell>
+                <TableCell>{results.job?.status?.toUpperCase() || 'N/A'}</TableCell>
+                <TableCell className="font-medium">Mode</TableCell>
+                <TableCell>{results.job?.operating_mode || 'N/A'}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Protocol</TableCell>
+                <TableCell>{results.job?.protocol_name || 'N/A'}</TableCell>
+                <TableCell className="font-medium">Runtime</TableCell>
+                <TableCell>
+                  {(() => {
+                    const total = results.job?.run_time_in_seconds
+                    if (total == null || isNaN(total)) return 'N/A'
+                    const h = Math.floor(total / 3600)
+                    const m = Math.floor((total % 3600) / 60)
+                    const s = total % 60
+                    if (h > 0) return `${h}h ${m}m`
+                    if (m > 0) return `${m}m ${s}s`
+                    return `${s}s`
+                  })()}
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Designs</TableCell>
+                <TableCell>{results.job?.num_designs ?? 'N/A'}</TableCell>
+                <TableCell className="font-medium">Budget</TableCell>
+                <TableCell>{results.job?.budget ?? 'N/A'}</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell className="font-medium">Created</TableCell>
+                <TableCell>{results.job?.created_at || 'N/A'}</TableCell>
+                <TableCell className="font-medium">Updated</TableCell>
+                <TableCell>{results.job?.updated_at || 'N/A'}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+          <p className="text-sm text-muted-foreground mt-2">
+            {results.count} file{results.count !== 1 ? 's' : ''} available
+          </p>
+          {/* Binder Optimization Selectivity Dashboard */}
+          {results.job?.operating_mode === 'BINDER_OPTIMIZATION' && (() => {
+            const dash = results.files.find(f => /selectivity_dashboard\.png$/i.test(f.name))
+            if (!dash) return null
+            return (
+              <div className="mt-6">
+                <h3 className="text-base font-semibold mb-2">Selectivity Dashboard</h3>
+                <div className="w-full border rounded-lg overflow-hidden">
+                  <img
+                    src={getPdfUrl(dash.url)}
+                    alt="Selectivity Dashboard"
+                    className="w-full h-auto object-contain"
+                  />
+                </div>
+              </div>
+            )
+          })()}
+        </div>
       </div>
+
+      
 
       {/* Files Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -343,6 +637,19 @@ export default function JobResultsPage() {
                 <CardDescription className="text-xs line-clamp-2">
                   {file.path}
                 </CardDescription>
+                <div className="mt-3">
+                  <Button asChild size="sm" variant="outline">
+                    <a
+                      href={getPdfUrl(file.url)}
+                      download
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Download ${file.name}`}
+                    >
+                      Download
+                    </a>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           )
@@ -379,18 +686,65 @@ export default function JobResultsPage() {
                       </div>
                     ) : csvData.length > 0 ? (
                       <div className="flex-1 overflow-auto">
-                        <Table>
-                          <TableHeader>
+                        {/* CSV toolbar */}
+                        <div className="flex items-center justify-between p-2 border-b">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                {(() => {
+                                  const all = csvTable.getAllLeafColumns().length
+                                  const vis = csvTable.getAllLeafColumns().filter(c => c.getIsVisible()).length
+                                  return `Columns (${vis}/${all})`
+                                })()}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="max-h-80 overflow-auto">
+                              {csvTable.getAllLeafColumns().map((col) => {
+                                const id = col.id
+                                const headerLabel = String(col.columnDef.header || id)
+                                return (
+                                  <DropdownMenuCheckboxItem
+                                    key={id}
+                                    checked={col.getIsVisible()}
+                                    onCheckedChange={(value) => col.toggleVisibility(Boolean(value))}
+                                    className="capitalize"
+                                  >
+                                    {headerLabel}
+                                  </DropdownMenuCheckboxItem>
+                                )
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        <Table className="table-fixed">
+                          <TableHeader className="sticky top-0 bg-background z-10">
                             {csvTable.getHeaderGroups().map((headerGroup) => (
                               <TableRow key={headerGroup.id}>
                                 {headerGroup.headers.map((header) => (
-                                  <TableHead key={header.id} className="sticky top-0 bg-background z-10">
-                                    {header.isPlaceholder
-                                      ? null
-                                      : flexRender(
-                                          header.column.columnDef.header,
-                                          header.getContext()
-                                        )}
+                                  <TableHead
+                                    key={header.id}
+                                    style={{ width: header.getSize() }}
+                                    className="relative border-r border-muted-foreground/20"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="truncate">
+                                        {(header.isPlaceholder || !header.column.getIsVisible())
+                                          ? null
+                                          : flexRender(
+                                              header.column.columnDef.header,
+                                              header.getContext()
+                                            )}
+                                      </div>
+                                      {/* Resizer */}
+                                      <div
+                                        onMouseDown={header.getResizeHandler()}
+                                        onTouchStart={header.getResizeHandler()}
+                                        className="absolute right-0 top-0 h-full w-1 cursor-col-resize select-none bg-muted-foreground/20 hover:bg-muted-foreground/50"
+                                        role="separator"
+                                        aria-orientation="vertical"
+                                        aria-label={`Resize ${String(header.column.columnDef.header)}`}
+                                      />
+                                    </div>
                                   </TableHead>
                                 ))}
                               </TableRow>
@@ -402,13 +756,20 @@ export default function JobResultsPage() {
                                 <TableRow
                                   key={row.id}
                                   data-state={row.getIsSelected() && 'selected'}
+                                  className="border-b border-muted-foreground/10"
                                 >
                                   {row.getVisibleCells().map((cell) => (
-                                    <TableCell key={cell.id}>
-                                      {flexRender(
-                                        cell.column.columnDef.cell,
-                                        cell.getContext()
-                                      )}
+                                    <TableCell
+                                      key={cell.id}
+                                      style={{ width: cell.column.getSize() }}
+                                      className="border-r border-muted-foreground/10"
+                                    >
+                                      <div className="truncate">
+                                        {flexRender(
+                                          cell.column.columnDef.cell,
+                                          cell.getContext()
+                                        )}
+                                      </div>
                                     </TableCell>
                                   ))}
                                 </TableRow>
@@ -438,6 +799,15 @@ export default function JobResultsPage() {
                 {getFileType(selectedFile.name) === 'pdf' && (
                   <PdfViewer fileUrl={getPdfUrl(selectedFile.url)} />
                 )}
+                {getFileType(selectedFile.name) === 'image' && (
+                  <div className="w-full h-full flex items-center justify-center bg-background">
+                    <img
+                      src={getPdfUrl(selectedFile.url)}
+                      alt={selectedFile.name}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                )}
                 {getFileType(selectedFile.name) === 'yaml' && (
                   <YamlViewer
                     fileUrl={selectedFile.url}
@@ -458,7 +828,9 @@ export default function JobResultsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+      <ScrollBar orientation="vertical" />
+    </ScrollArea>
   )
 }
 

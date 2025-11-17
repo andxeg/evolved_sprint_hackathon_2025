@@ -14,6 +14,7 @@ interface YamlEditorProps {
   onReset?: () => void
   isLoading?: boolean
   error?: string | null
+  readOnly?: boolean
 }
 
 export function YamlEditor({
@@ -22,7 +23,8 @@ export function YamlEditor({
   onSave,
   onReset: _onReset,
   isLoading = false,
-  error = null
+  error = null,
+  readOnly = true
 }: YamlEditorProps) {
   const editorRef = useRef<any>(null)
 
@@ -112,7 +114,7 @@ export function YamlEditor({
         options={{
           selectOnLineNumbers: true,
           roundedSelection: false,
-          readOnly: false,
+          readOnly: readOnly,
           cursorStyle: 'line',
           automaticLayout: true,
           contextmenu: true,

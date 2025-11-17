@@ -1,0 +1,52 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "type": "input",
+      "position": { "x": 200, "y": 150 },
+      "data": {
+        "label": "Generate Binders Spec",
+        "type": "generate-binders-spec",
+        "description": "Upload binder scaffold CIF and primary target PDB"
+      }
+    },
+    {
+      "id": "2",
+      "type": "pipeline",
+      "position": { "x": 460, "y": 150 },
+      "data": {
+        "label": "Boltzgen",
+        "type": "pipeline",
+        "pipelineType": "boltzgen",
+        "description": "Boltzgen pipeline with configurable protocol, designs, and budget"
+      }
+    },
+    {
+      "id": "3",
+      "type": "model",
+      "position": { "x": 720, "y": 150 },
+      "data": {
+        "label": "Boltz-2 PPI Rank",
+        "type": "model",
+        "description": "Upload target sequence from a FASTA file to include in the design"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1-2",
+      "source": "1",
+      "target": "2",
+      "animated": true,
+      "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
+    },
+    {
+      "id": "e2-3",
+      "source": "2",
+      "target": "3",
+      "animated": true,
+      "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
+    }
+  ]
+}
+

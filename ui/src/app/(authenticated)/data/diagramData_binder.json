@@ -1,0 +1,93 @@
+{
+  "nodes": [
+    {
+      "id": "1",
+      "type": "input",
+      "position": { "x": 200, "y": 150 },
+      "data": {
+        "label": "Design Spec",
+        "type": "design_binder_optimization",
+        "description": "Define entities (proteins, ligands, files) and constraints for binder optimization"
+      }
+    },
+    {
+      "id": "2",
+      "type": "pipeline",
+      "position": { "x": 420, "y": 150 },
+      "data": {
+        "label": "Boltzgen",
+        "type": "pipeline",
+        "pipelineType": "boltzgen",
+        "description": "Boltzgen pipeline with multiple processing steps",
+        "substeps": [
+          "Inverse Folding",
+          "Folding",
+          "Design Folding",
+          "Analysis",
+          "Filtering"
+        ]
+      }
+    },
+    {
+      "id": "3",
+      "type": "model",
+      "position": { "x": 540, "y": 150 },
+      "data": {
+        "label": "Boltz-2",
+        "type": "model",
+        "description": "Keep N out of M top-candidates, run N * K off-target predictions"
+      }
+    },
+    {
+      "id": "4",
+      "type": "process",
+      "position": { "x": 780, "y": 150 },
+      "data": {
+        "label": "Selectivity Scoring",
+        "type": "selectivity-scoring",
+        "description": "Score designs for selectivity across multiple targets"
+      }
+    },
+    {
+      "id": "5",
+      "type": "process",
+      "position": { "x": 900, "y": 150 },
+      "data": {
+        "label": "Pareto Optimization",
+        "type": "pareto-optimization",
+        "description": "Optimize designs using Pareto frontier analysis"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1-2",
+      "source": "1",
+      "target": "2",
+      "animated": true,
+      "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
+    },
+    {
+      "id": "e2-3",
+      "source": "2",
+      "target": "3",
+      "animated": true,
+      "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
+    },
+    {
+      "id": "e3-4",
+      "source": "3",
+      "target": "4",
+      "animated": true,
+      "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
+    },
+    {
+      "id": "e4-5",
+      "source": "4",
+      "target": "5",
+      "animated": true,
+      "style": { "stroke": "#3b82f6", "strokeWidth": 2 }
+    }
+  ]
+}
+
